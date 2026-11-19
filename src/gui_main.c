@@ -525,7 +525,7 @@ int main(void) {
      * changes, messages and F-key presses is on everywhere (off while transmitting) */
     voice_auto_set(true);
     /* which boot menu key starts this build is in Settings > Voice > START-UP, not said at every start */
-    voice_say_text_fmt("Open X 6 X hundred ready, speech enabled");
+    voice_say_text_fmt("Open X 6 X hundred, with speech, ready");
     gui_loop();
     return 0;
 }
