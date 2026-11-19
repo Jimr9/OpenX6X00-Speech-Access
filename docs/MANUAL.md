@@ -7443,7 +7443,7 @@ is paired once, with a code the radio shows:
 
 1. The page's bar says "View only · Pair to operate". Tap it, or any key or
    knob on the page, which opens the same dialog: the radio puts a six-digit
-   code on its screen for two minutes (Settings > General > BROWSER REMOTE >
+   code on its screen, good for five minutes (Settings > General > BROWSER REMOTE >
    Pair code shows it again, and the card shows it too).
 2. Type the code and a name for the browser ("Kitchen phone", "Shack PC").
    Three wrong tries burn the code; Pair asks for a new one. A browser gets a

@@ -262,7 +262,7 @@
     const code = $("<input inputmode='numeric' pattern='[0-9]*' maxlength='6' autocomplete='off' placeholder='6 digits'>");
     const name = $("<input maxlength='24' autocomplete='off' placeholder='for example Kitchen phone'>").val(load(NAME_KEY) || "");
     const body = $("<div>").append(
-      $("<p>").text("This browser only watches until it is paired, once. A six-digit code is now on the radio's screen for two minutes (Settings › General › BROWSER REMOTE › Pair code shows it again). Type it here, and a name for this browser."),
+      $("<p>").text("This browser only watches until it is paired, once. A six-digit code is now on the radio's screen, good for five minutes (Settings › General › BROWSER REMOTE › Pair code shows it again). Type it here, and a name for this browser."),
       $("<label>").text("Code").append(code), $("<label>").text("This browser's name").append(name),
       this.pairError ? $("<p class='err'>").text(this.pairError) : "");
     const go = function() {

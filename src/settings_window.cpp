@@ -2685,7 +2685,7 @@ static void rs_pair_cb(lv_event_t *e) {
     remote_server_pair_code(code, sizeof(code));
     if (rs.pair) {
         char text[64];
-        snprintf(text, sizeof(text), "code %s, two minutes", code);
+        snprintf(text, sizeof(text), "code %s, five minutes", code);
         lv_label_set_text(rs.pair, text);
     }
 }

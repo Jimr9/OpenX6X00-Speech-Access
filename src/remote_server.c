@@ -22,7 +22,7 @@
  *  answers rather than by counting (audit C02).
  *
  *  Sessions and control (R3): a new connection may only watch and listen ("role view 0 -").
- *  "pair?" puts a six-digit code on the radio's screen for two minutes (a new code at most every
+ *  "pair?" puts a six-digit code on the radio's screen, good for five minutes (a new code at most every
  *  30 s, the wait doubling after each code burned by three wrong tries, up to an hour: "err
  *  pairing paused ..."; a code asked on the radio itself starts the waits over); "pair CODE NAME" with
  *  the right code makes a session (the first one ever is admin, the others operate, with TX),
@@ -228,7 +228,7 @@ typedef struct {
 enum { ROLE_VIEW = 0, ROLE_OPERATE = 1, ROLE_ADMIN = 2 };
 #define SESS_MAX     16
 #define TOKEN_LEN    32
-#define PAIR_MS      120000   /* the code stays good this long */
+#define PAIR_MS      300000   /* the code stays good this long */
 #define PAIR_SHOW_MS 15000    /* and shows on the screen this long */
 #define PAIR_TRIES   3
 #define PAIR_WAIT_MS 30000    /* a browser gets a new code at most this often */
@@ -717,9 +717,9 @@ static void pair_msg_apply(void *arg) {
         snprintf(spoken + n, sizeof(spoken) - n, "%s%c", n ? " " : "", *d);
     }
     voice_msg_hold(true);
-    msg_schedule_text_ms(PAIR_SHOW_MS, "Pair code: #ffb020 %s#  (2 min)", code);
+    msg_schedule_text_ms(PAIR_SHOW_MS, "Pair code: #ffb020 %s#  (5 min)", code);
     voice_msg_hold(false);
-    voice_say_text_fmt("Pair code: %s. Again: %s. Good for 2 minutes.", spoken, spoken);
+    voice_say_text_fmt("Pair code: %s. Again: %s. Good for 5 minutes.", spoken, spoken);
 }
 
 /* LVGL thread: pairing paused, for how many minutes */
@@ -2165,7 +2165,7 @@ static void handle_text(client_t *c, char *text) {
     } else if (!strcmp(a[0], "pair?")) {
         int wait = pair_show(NULL, 0, false);
         if (!wait)
-            client_text(c, "pairing code shown on the radio for 2 min");
+            client_text(c, "pairing code shown on the radio for 5 min");
         else if (wait < 120)
             client_textf(c, "err pairing paused: a new code in %d s, or Settings > General > BROWSER REMOTE > Pair code "
                             "on the radio", wait);
