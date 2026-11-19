@@ -1,0 +1,46 @@
+OpenX6X00 speech, test 4
+
+Only what changed since test 3. Everything in TESTING-speech-test3.txt still applies.
+Write after each test: OK, silent, or wrong (and what it said).
+Your WiFi has to be joined again after flashing (Settings, F5 Wireless). The SSH key for me stays on the card.
+
+
+1. Dropdown lists (the fix for Country and Zone)
+Settings > General: turn to Country, press the small knob to open the list, turn.
+Expect: each country as you move, with its place: "Argentina, 8 of 250". Press to choose it.
+Do the same on Zone: "America/Chicago (CST/CDT), 45 of 120".
+Press VOL to close a list without choosing.
+
+2. Settings tabs
+Open Settings.
+Expect: "Settings. Tabs on the F-keys, page 1 of 3: F2 General, F3 Display, F4 Audio, F5 Wireless. F1 more tabs", then the first row.
+Press F1: "Settings tabs, page 2 of 3: F2 Bluetooth, F3 Keys, F4 Cluster, F5 TX Cal. F1 more tabs".
+Press F5 (or another tab): the tab's name, then its first row, for example "Wireless. Speaker mode, off".
+
+3. F-key pages say what is on F2 to F5
+Tap GEN.
+Expect: "VOL page 1. F2 Volume, 25, F3 Squelch, 0, F4 RF gain, 63, F5 TX power, 5 W" (your values).
+Tap DFL. Expect: "Filter page. F1 Filter low, ..., F2 Filter high, ...".
+
+4. Frequencies
+Tune to 14.074 and stop.
+Expect: "14.074" (it said "14.74" before, the same as 14.740).
+On 6 meters: "50.053.500" and so on.
+
+5. The address
+Power key tap on the main screen: at the end, "WiFi address 192 dot 168 dot 5 dot 80".
+Settings > Wireless: your network's row says "connected, address 192 dot 168 ...".
+
+6. Antenna tuner
+Hold ATU to start a tuning cycle (antenna or dummy load on). Nothing is said while it tunes.
+Expect, when it finishes: "Tuner done, S W R 1.2" (the SWR it reached). If it fails, as before: "Tuner: no match" or "Tuner stopped".
+
+7. Manual TUNE (the Ext tune button, for an external tuner; antenna or dummy load on)
+Let it run to its limit, or press the button again to stop it.
+Expect: "Tune over, 10 second limit, 5.0 watts, S W R 1.3", or "Tune stopped" with the reason and the same readings.
+
+8. Messages during a transmission
+Anything the radio reports while transmitting is now said as soon as it receives again. For example the SWR protection "TX stopped: SWR 3.1", or "TX 0 W" when no power comes out. Before, these were lost. If you see one come up, tell me whether you heard it after the over.
+
+9. Number boxes
+Settings > General > Date and Time, or a TX shift: numbers are said plain, "30" rather than "+00030", "minus" for a minus sign.

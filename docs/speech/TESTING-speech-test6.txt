@@ -1,0 +1,50 @@
+OpenX6X00 speech, test 6
+
+Everything from test 5 is in this build (TESTING-speech-test5.txt still applies), plus the fixes below.
+Write after each test: OK, silent, or wrong (and what it said).
+Remember: an ATU tune or SWR sweep can stop speech (the base board's fault); power off and on to get it back.
+
+
+1. Weather, line by line (APPS number 22)
+Expect when it opens: "Weather, now, 18 lines. Small knob: line by line." and the first line, the temperature, "12.3 degrees C".
+Turn the small knob: one line at a time, with its place: "Wind, NW 15 km/h, 6 of 18", "Humidity, 80 %, 8 of 18".
+F1 Now, F2 5 days, F3 Warnings: each view read the same way, its name, how many lines, the first one.
+In 5 days, each day starts with its name and temperatures: "Thu, 14 degrees C / 8".
+F4 Update: a fresh forecast, read when it comes. F5 turns warning notices on and off.
+
+2. Settings > Info (page 3, F2): line by line
+Turn the small knob: each line, "Version, v0.3.12, 1 of 15", "Baseband, ...", "Battery, 7.7 V 100%", with the buttons (Update, Factory reset) in their place.
+The same in any other Settings card with information rows.
+
+3. Settings rows say their place
+Turning through any Settings tab: each row ends with its place, "Speaker mode, off, 1 of 22".
+
+4. Rows with two controls
+Settings > Audio (F4): "Line-in, 10" and "Line-out, 10" for the two of that row, "Play, ..." and "Rec gain, 0.0" for the next.
+
+5. Date and Time
+Settings > General: "Day, 18", "Month, 11", "Year, 2026", "Hour, 20", "Minute, 15", "Second, 30".
+
+6. Display (F3), the first row
+"Screen dims after, seconds, 0 never, 30", then "Brightness, dimmed and normal, from 10 to 30".
+
+7. VOL in an open list
+Settings > General > Country: press the small knob to open the list, turn a little, press VOL.
+Expect: the list closes, the country as it was is said, and Settings stays open.
+
+8. The F-keys said
+Opening any app now says its F-keys with its name: SWR Scan (APPS number 8), "SWR Scan. F1 Run, F2 Scale, Log, F3 Span, 200 kHz".
+A tap of the power key ends with the F-keys of where you are: "... F-keys: F1 Run, F2 Scale, ..." in a window, and on the main screen the page shown.
+
+9. Keys that do nothing now say so
+An F-key with no button on the page: "F5, not used".
+A button with no long press, held: "Run, no long press".
+A long press with no action set in Settings: "No long press action set".
+Mode keys while an app holds the mode (FT8, JS8 and the like): "Mode locked by the app". A/B there: "VFO locked by the app".
+V/M in a window: "V M, not used here". Any other key the radio has no use for: "Not used".
+Tell me any key that still does nothing in silence, and where you were.
+
+10. SWR scan result rounded: "lowest S W R 1.2 at 14.118".
+
+11. Accented letters
+Country list: "Aland Islands" said whole (it was "land Islands"). Weather: "degrees" for the degree sign.

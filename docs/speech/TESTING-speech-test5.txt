@@ -1,0 +1,73 @@
+OpenX6X00 speech, test 5: the apps
+
+Test 5 has everything from test 4 (see TESTING-speech-test4.txt) plus the apps below. If you have not done test 4 yet, its sheet still applies to this build.
+Write after each test: OK, silent, or wrong (and what it said).
+WARNING: an ATU tune or an SWR sweep can leave the radio with no speech (a fault in Xiegu's base board firmware, the same as on our main build). Receive audio still works. To get speech back, hold LOCK for about 8 seconds until the radio restarts (on battery it may switch off: power it on again), or power the radio off and on. Do the ATU and SWR tests last.
+
+Every app is opened from the APPS grid: tap APP, turn the small knob to the number given, press the small knob.
+Press VOL to close an app. Tap the power key in any app to hear its whole screen.
+After flashing, join WiFi again (Settings, F5 Wireless): Weather, Flights, Web radio, Zello and the Cluster need it.
+
+
+1. Frequency lists (WeFax, NavTex, SSTV, FreeDV)
+In those apps a frequency list opens from their F-keys (the one named Freq or Frequencies).
+Expect when it opens: its title, "frequency list", then the station the knob is on.
+Turn: each one, "Northwood, 4.610, U S B, Europe, 3 of 20". Press: tunes it.
+
+2. HF Air Band (APPS number 20)
+Expect: "HF Air Band, North America. Small knob: the frequencies, press: tune. F1 area, F3 save, F4 scan", then the first frequency.
+Turn: "2950 kilohertz, CAR, Caribbean, on the air: New York VOLMET, 3 of 40".
+
+3. Weather (APPS number 22)
+Expect: "Asking for the weather", then when it comes "Weather, now" and the whole of it read.
+Turn the small knob: the next view, "Weather, 5 days", then "Weather, warnings", each read in full.
+Press the small knob: a fresh forecast, read when it comes.
+The automatic refresh every 15 minutes does not read it again.
+
+4. Flights (APPS number 19)
+Turn the small knob: each aircraft, its call sign, registration, type, height, speed, track, then distance and direction, "35 kilometers NW, 2 of 9".
+
+5. CB (APPS number 21)
+Turn: each channel, "Channel 9, 27.065 MHz, A M, Emergency, 9 of 40".
+
+6. Bands (APPS number 4)
+Turn: each band's line, its activity word and counts, and who hears you.
+
+7. Propagation (APPS number 5), the beacons view
+Turn: each beacon, where it is, how far, and when and how well it was heard.
+
+8. GPS (APPS number 12)
+Turn or press the small knob: the whole table read, status, fix, satellites, time, position, grid.
+When a fix comes or goes: "GPS fix, 3D, grid E M 1 8" or "GPS fix lost".
+
+9. Web radio (APPS number 16)
+Turn: each country, then each station with what the list shows of it, "BBC World Service, 64k, 3 of 120".
+
+10. Zello (17) and SVXConnect (18)
+Turn: each channel or talkgroup read from the list.
+
+11. Birdie Cal (APPS number 15, antenna off)
+Start a scan. When it ends: its result and "Known birdies: ...".
+
+12. WSPR (Digital modes)
+After each two-minute cycle with spots: "WSPR, 2 spots: K 1 A B C, F N 4 2, minus 15 dB; ...".
+
+13. RADE / FreeDV (Digital modes)
+When a signal is found or lost: "R A D E sync", "R A D E searching". The callsign an over ends with: "Heard K 1 A B C".
+
+14. CW Trainer (APPS number 10)
+Learn: after you key a group back, "Right", or "Wrong, sent K M R, heard K N R".
+Calls: "Right, 21 W P M", or "Wrong, it was K 1 A B C, 19 W P M", and at the end of a run its score.
+
+15. Field Ops (APPS number 3)
+Turn on the home row: each programme, "POTA, Parks on the Air, 4 of 15".
+In a list (references, the log): each row's cells and its place.
+
+16. Tuner and TUNE, messages during transmit (from test 4)
+Hold ATU: "Tuner done, S W R 1.2" when it ends.
+Ext tune: "Tune over, 10 second limit, 5.0 watts, S W R 1.3".
+Any message that came up while transmitting is said once the radio receives again.
+
+
+STILL ONLY BY THE POWER KEY (tap it to hear the screen)
+WeFax and SSTV pictures (only their messages are spoken), Screen Rec, Walkie, the Snake game, and Field Ops' activation screen.

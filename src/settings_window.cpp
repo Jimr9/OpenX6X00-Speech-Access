@@ -9,6 +9,9 @@
 #include "image_level.h"
 #include "settings_window.h"
 #include "board.h"
+#include "voice.h"
+#include "voice_focus.h"
+#include "bootmenu.h"
 
 #include "dsp.h"
 #include "wifi.h"
@@ -106,6 +109,7 @@ static uint8_t info_row(uint8_t row, const char *label, const char *val);
 #define TEST_BASE_NOTE "TEST ONLY, not validated on a radio"
 
 static void make_walkie_page();
+static void make_voice_page();
 static void wl_row_label(uint8_t row, const char *text);
 static void nn_load(char *out, size_t size);     /* the network name (Wireless) */
 static void ts_update();                         /* Tailscale (Wireless) */
@@ -133,9 +137,31 @@ static void key_cb(lv_event_t *e);
 
 /* The page button, and the APP key pressed again: the next page of buttons, and its first tab opens
  * (buttons_load_page_group presses the page button for the key) */
+static bool tabs_said;      /* a hint naming the tabs is on its way: tab_press() leaves it */
+
+/* "Settings tabs, page 2: F2 Bluetooth, F3 Keys, F4 Cluster, F5 TX Cal. F1 more tabs" */
+static void tabs_hint(const char *head, buttons_page_t *pg, int num) {
+    char   s[300];
+    size_t n = (size_t)snprintf(s, sizeof(s), "%s, page %d of 3:", head, num);
+
+    for (int i = 1; i < 5 && n + 8 < sizeof(s); i++) {
+        if (pg->items[i] && pg->items[i]->label) {
+            n += snprintf(s + n, sizeof(s) - n, "%s F%d %s", i == 1 ? "" : ",", i + 1, pg->items[i]->label);
+        }
+    }
+    snprintf(s + n, sizeof(s) - n, ". F1 more tabs");
+    voice_focus_hint(s);
+    tabs_said = true;
+}
+
 static void page_press(button_data_t *btn) {
     button_next_page_cb(btn);
-    if (btn->next && btn->next->items[1]) tab_press(btn->next->items[1]);
+    if (btn->next && btn->next->items[1]) {
+        int num = btn->next->items[0] && btn->next->items[0]->label ? btn->next->items[0]->label[10] - '0' : 0;
+
+        tabs_hint("Settings tabs", btn->next, num);
+        tab_press(btn->next->items[1]);
+    }
 }
 
 static button_data_t btn_p1        = { .type = BTN_TEXT, .label = "(SETTINGS\n1:3)", .press = page_press };
@@ -151,10 +177,11 @@ static button_data_t btn_cluster   = { .type = BTN_TEXT, .label = "Cluster", .pr
 static button_data_t btn_txcal     = { .type = BTN_TEXT, .label = "TX Cal", .press = tab_press };
 static button_data_t btn_info      = { .type = BTN_TEXT, .label = "Info", .press = tab_press };
 static button_data_t btn_walkie    = { .type = BTN_TEXT, .label = "Walkie", .press = tab_press };
+static button_data_t btn_voice     = { .type = BTN_TEXT, .label = "Voice", .press = tab_press };
 
 static buttons_page_t btn_page   = {{&btn_p1, &btn_general, &btn_display, &btn_audio, &btn_wireless}};
 static buttons_page_t btn_page_2 = {{&btn_p2, &btn_bluetooth, &btn_keys, &btn_cluster, &btn_txcal}};
-static buttons_page_t btn_page_3 = {{&btn_p3, &btn_info, &btn_walkie}};
+static buttons_page_t btn_page_3 = {{&btn_p3, &btn_info, &btn_walkie, &btn_voice}};
 static buttons_page_t *btn_pages[] = {&btn_page, &btn_page_2, &btn_page_3};
 
 static dialog_t dialog = {
@@ -186,6 +213,7 @@ static const struct {
     {&btn_bluetooth, make_bluetooth_page, "bluetooth"}, {&btn_keys, make_keys_page, "keys"},
     {&btn_cluster, make_cluster_page, "cluster"},   {&btn_txcal, make_txcal_page, "txcal"},
     {&btn_info, make_info_page, "info"},            {&btn_walkie, make_walkie_page, "walkie"},
+    {&btn_voice, make_voice_page, "audio"},
 };
 
 /* Left rail: the tabs of all button pages, numbered, the current one marked */
@@ -287,6 +315,10 @@ static void mark_tab(button_data_t *btn_data) {
 }
 
 static void tab_press(button_data_t *btn) {
+    if (!tabs_said && btn->label) {
+        voice_focus_hint(btn->label);   /* "Wireless", then its first row */
+    }
+    tabs_said = false;
     for (auto &t : tabs) {
         if (t.btn == btn) t.make();
     }
@@ -592,7 +624,10 @@ static uint8_t make_dt_row(uint8_t row, const char *label, int first) {
     for (int i = first; i < first + 3; i++) {
         const clock_field_t *f = &clock_fields[i];
 
+        static const char *const spoken[6] = {"Day", "Month", "Year", "Hour", "Minute", "Second"};
+
         dt_spin[i] = row_spin(row, 1 + i - first, 1, dt_w[i], *dt_field(i) + f->base, f->lo, f->hi, f->digits);
+        voice_focus_set_name(dt_spin[i], spoken[i]);    /* "Day, 18", not "Date, 18" three times */
         lv_obj_add_event_cb(dt_spin[i], dt_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
         lv_obj_add_event_cb(dt_spin[i], dt_rtc_cb, LV_EVENT_FOCUSED, NULL);
     }
@@ -691,6 +726,7 @@ static uint8_t make_backlight(uint8_t row) {
     wl_row_label(row, "Timeout (0 off), Brightness");
     obj = row_spin(row, 1, 2, SMALL_2, params.brightness_timeout, SCREEN_DIM_OFF, SCREEN_DIM_MAX_S, 3);
     lv_obj_add_event_cb(obj, bl_timeout_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    voice_focus_set_name(obj, "Screen dims after, seconds, 0 never");
 
     bl_slider = obj = lv_slider_create(row_cell(row, 3, 4, SMALL_4));
     dialog_item(&dialog, obj);
@@ -702,6 +738,7 @@ static uint8_t make_backlight(uint8_t row) {
     lv_obj_set_width(obj, SMALL_4 - 30);
     lv_obj_center(obj);
     lv_obj_add_event_cb(obj, bl_level_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    voice_focus_set_name(obj, "Brightness, dimmed and normal");
     row++;
 
     wl_row_label(row, "Buttons brightness");
@@ -804,6 +841,7 @@ static const key_action_t front_actions[] = {
     {" Screen rec on/off ", ACTION_SCREEN_REC},
     {" Mute ", ACTION_MUTE},
     {" Frequency lock on/off ", ACTION_FREQ_LOCK},
+    {" Speech mode ", ACTION_VOICE_MODE},
     {" Step up ", ACTION_STEP_UP},
     {" Step down ", ACTION_STEP_DOWN},     /* FST's long press until it is changed */
     {" WF mode ", ACTION_WF_MODE},
@@ -857,6 +895,7 @@ static const key_action_t mic_actions[] = {
     {" Step up ", ACTION_STEP_UP},
     {" Step down ", ACTION_STEP_DOWN},
     {" Frequency lock on/off ", ACTION_FREQ_LOCK},
+    {" Speech mode ", ACTION_VOICE_MODE},
     {" NR toggle ", ACTION_NR_TOGGLE},
     {" NB toggle ", ACTION_NB_TOGGLE},
     {" WF mode ", ACTION_WF_MODE},
@@ -1855,6 +1894,23 @@ static void wl_row_show(wl_row_t *r, bool show, lv_obj_t *fallback) {
 
 /* Action menu */
 
+/* Spoken: the action chosen, its note and place; first: the menu's title before it */
+static void wl_menu_say(const char *first) {
+    if (wl_sel < 0 || wl_sel >= (int)wl_items.size()) {
+        return;
+    }
+    const wl_item_t &it = wl_items[wl_sel];
+    char             text[200];
+
+    snprintf(text, sizeof(text), "%s%s%s%s%s, %i of %i", first ? first : "", first ? ", menu, " : "",
+             it.label.c_str(), it.note.empty() ? "" : ", ", it.note.c_str(), wl_sel + 1, (int)wl_items.size());
+    if (first) {
+        voice_say_clean(text, false);
+    } else {
+        voice_say_clean(text, true);
+    }
+}
+
 static void wl_menu_show_sel() {
     for (size_t i = 0; i < wl_item_rows.size(); i++) {
         bool on = (int)i == wl_sel;
@@ -1898,12 +1954,14 @@ static void wl_menu_key_cb(lv_event_t *e) {
         case LV_KEY_UP:
             if (wl_sel > 0) wl_sel--;
             wl_menu_show_sel();
+            wl_menu_say(NULL);
             break;
 
         case LV_KEY_RIGHT:
         case LV_KEY_DOWN:
             if (wl_sel < (int)wl_items.size() - 1) wl_sel++;
             wl_menu_show_sel();
+            wl_menu_say(NULL);
             break;
 
         case LV_KEY_ENTER:
@@ -1995,8 +2053,10 @@ static void wl_menu_open(const std::string &title, std::vector<wl_item_t> items)
     lv_group_add_obj(keyboard_group, wl_menu);
     lv_obj_add_event_cb(wl_menu, wl_menu_key_cb, LV_EVENT_KEY, NULL);
     lv_obj_add_event_cb(wl_menu, wl_menu_click_cb, LV_EVENT_CLICKED, NULL);
+    voice_focus_quiet(wl_menu);     /* wl_menu_say() speaks the choice */
     lv_group_focus_obj(wl_menu);
     lv_group_set_editing(keyboard_group, true);
+    wl_menu_say(title.c_str());
 }
 
 /* WiFi */
@@ -2064,6 +2124,22 @@ static void wifi_update() {
             wl_pill(r->pill_1, NULL, 0, 0);
         }
         lv_label_set_text(r->note, ap->known ? "saved" : "");
+
+        char said[240];
+
+        char addr[96] = "";
+
+        if (ap->is_connected) {
+            char ipt[80];
+
+            voice_ip_text(ipt, sizeof(ipt));
+            if (ipt[0]) snprintf(addr, sizeof(addr), ", address %s", ipt);
+        }
+        snprintf(said, sizeof(said), "%s%s%s%s, %s, signal %u percent, %i of %i", ap->ssid,
+                 ap->is_connected ? ", connected" : "", addr, ap->known ? ", saved" : "",
+                 ap->unsupported ? ap->unsupported : ap->password_validator ? "secured" : "open",
+                 (unsigned)ap->strength, i + 1, n);
+        voice_focus_set_text(r->obj, said);
     }
     lv_label_set_text(wf.status_ssid, wifi_eth_active() ? "Ethernet in use" : ssid);
 
@@ -2141,6 +2217,11 @@ static void wl_kbd_open(const wifi_ap_info_t &ap) {
     wl_kbd_ap = ap;
     wl_kbd = true;
     lv_group_remove_all_objs(keyboard_group);
+
+    char hint[160];
+
+    snprintf(hint, sizeof(hint), "Password for %s. Small knob: the keys, press: type, done: finish", ap.ssid);
+    voice_focus_hint(hint);
     textarea_window_open(wl_kbd_ok, wl_kbd_close);
     lv_textarea_set_placeholder_text(textarea_window_text(), " Password");
 }
@@ -2297,6 +2378,15 @@ static void bt_update_view() {
             lv_label_set_text(r->note, "");
         }
         lv_obj_align(r->note, LV_ALIGN_LEFT_MID, d->connected ? 580 : 430, 0);
+
+        /* Spoken: the pills are pictures to the reader. "Jabra Elite, headphones, connected, 1 of 3" */
+        char said[200];
+
+        snprintf(said, sizeof(said), "%s, %s%s, %i of %i", d->name,
+                 !d->paired ? "new, press to pair" : d->audio ? "headphones" : d->input ? "keyboard"
+                 : d->phone ? "phone" : "CAT",
+                 d->paired ? (d->connected ? ", connected" : ", not connected") : "", (int)i + 1, (int)n);
+        voice_focus_set_text(r->obj, said);
     }
 }
 
@@ -3031,6 +3121,7 @@ static lv_coord_t notes_bottom(lv_obj_t *obj) {
 static void focus_cb(lv_group_t *g) {
     lv_obj_t *obj = lv_group_get_focused(g);
 
+    voice_focus_cb(g);      /* spoken feedback: the row's name and value */
     focus_row_label(obj);
     if (!page || !obj || !lv_obj_has_flag(page, LV_OBJ_FLAG_SCROLLABLE)) {
         return;
@@ -3509,6 +3600,199 @@ static void make_walkie_page() {
     row = make_param_switch(row, "Main knob steps channels", cfg_sm.p_walkie_mem);
     row = make_mic(row, "Microphone", cfg_sm.p_walkie_mic);
     card_end(row);
+}
+
+/* Spoken feedback (voice.cpp). A change here is spoken whatever the voice mode (voice_sure()): turning
+ * the mode to Off says so, the voice chosen says hello */
+static void voice_mode_cb(lv_event_t *e) {
+    int_choice_cb(e);
+    voice_sure();
+}
+
+static void voice_choice_cb(lv_event_t *e) {
+    int_choice_cb(e);
+    voice_sure();
+    voice_say_lang();
+}
+
+static void voice_slider_cb(lv_event_t *e) {
+    voice_sure();
+}
+
+static param_slider_t voice_rate_slider   = {&cfg_sm.p_voice_rate, 50, 150, 5, "%i%%"};
+static param_slider_t voice_pitch_slider  = {&cfg_sm.p_voice_pitch, 50, 150, 5, "%i%%"};
+static param_slider_t voice_volume_slider = {&cfg_sm.p_voice_volume, 50, 150, 5, "%i%%"};
+static param_slider_t voice_repeat_slider = {&cfg_sm.p_voice_repeat_count, 0, 20, 1, "%i"};
+static param_slider_t voice_delay_slider  = {&cfg_sm.p_voice_interrupt_delay_ms, 0, 1000, 50, "%i ms"};
+static param_slider_t voice_fdelay_slider = {&cfg_sm.p_voice_freq_interrupt_delay_ms, 0, 1000, 50, "%i ms"};
+
+/* The multi-boot card (bootmenu.h): which system starts, how long the menus wait, a one-time start of another */
+static bootmenu_t bm;
+static int        bm_keys[BOOTMENU_MAX];     /* the dropdowns' items: the systems' keys, the talking menu left out */
+static int        bm_keys_n;
+static const int  bm_waits[] = {0, 10, 20, 30, 60};
+static const int  bm_secs[]  = {0, 1, 2, 3, 5, 10, 15};
+
+static void bm_saved(bool ok, const char *what) {
+    voice_sure();
+    if (!ok) voice_say_text_fmt("Could not write the boot card");
+    else if (what) voice_say_text_fmt("%s", what);
+}
+
+static void bm_start_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+    int key = sel == 0 ? bm.talk : bm.talk_default;
+
+    bm.screen_default = key;
+    bm_saved(bootmenu_set_screen(key, -1), sel == 0 ? "Saved, the talking menu starts" : "Saved, the default build starts");
+}
+
+static void bm_default_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+    int key = sel < bm_keys_n ? bm_keys[sel] : 1;
+    bool ok;
+
+    bm.talk_default = key;
+    ok = bootmenu_set_talk(key, -1);
+    if (bm.screen_default != bm.talk || !bm.talk) {
+        bm.screen_default = key;
+        ok = bootmenu_set_screen(key, -1) && ok;
+    }
+    bm_saved(ok, "Saved");
+}
+
+static void bm_wait_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+
+    bm.talk_wait = bm_waits[sel];
+    bm_saved(bootmenu_set_talk(-1, bm.talk_wait), "Saved");
+}
+
+static void bm_secs_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+
+    bm.screen_secs = bm_secs[sel];
+    bm_saved(bootmenu_set_screen(-1, bm.screen_secs), "Saved");
+}
+
+static void bm_restart_timer(lv_timer_t *t) {
+    int key = (int)(intptr_t)t->user_data;
+
+    if (!bootmenu_restart_into(key)) bm_saved(false, NULL);
+}
+
+static void bm_restart_cb(lv_event_t *e) {
+    lv_obj_t *dd  = lv_event_get_target(e);
+    int       sel = lv_dropdown_get_selected(dd);
+    int       key;
+
+    if (sel == 0 || sel > bm_keys_n) return;
+    key = bm_keys[sel - 1];
+    voice_sure();
+    voice_say_text_fmt("Restarting into F%i, %s. The default stays as it is", key, bm.name[key - 1]);
+    msg_update_text_fmt("Restarting into F%i %s", key, bm.name[key - 1]);
+    lv_timer_set_repeat_count(lv_timer_create(bm_restart_timer, 5000, (void *)(intptr_t)key), 1);
+}
+
+static int bm_index(const int *list, int n, int v) {
+    int best = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (list[i] <= v) best = i;
+    }
+    return best;
+}
+
+static void make_startup_card() {
+    static char systems[BOOTMENU_MAX * 48], restart[BOOTMENU_MAX * 48 + 32], title[40];
+    int         def_sel = 0;
+    uint8_t     row;
+
+    if (!bootmenu_read(&bm)) return;
+    systems[0] = '\0';
+    bm_keys_n  = 0;
+    for (int k = 1; k <= bm.n; k++) {
+        char item[48];
+
+        if (k == bm.talk || !bm.name[k - 1][0]) continue;
+        snprintf(item, sizeof(item), "F%i %s", k, bm.name[k - 1]);
+        if (bm_keys_n) strcat(systems, "\n");
+        strcat(systems, item);
+        if (k == bm.talk_default) def_sel = bm_keys_n;
+        bm_keys[bm_keys_n++] = k;
+    }
+    if (!bm_keys_n) return;
+    snprintf(restart, sizeof(restart), "Choose one\n%s", systems);
+
+    if (bm.self)
+        snprintf(title, sizeof(title), "START-UP (THIS BUILD IS F%i)", bm.self);
+    else
+        snprintf(title, sizeof(title), "START-UP");
+    row = card_begin(title);
+    if (bm.talk) {
+        wl_row_label(row, "At power-on");
+        row_choice(row, 1, 3, SMALL_3, "Talking menu\nThe default build", bm.screen_default == bm.talk ? 0 : 1,
+                   bm_start_cb, NULL);
+        row++;
+    }
+    wl_row_label(row, "Default build");
+    row_choice(row, 1, 3, SMALL_3, systems, def_sel, bm_default_cb, NULL);
+    row++;
+    if (bm.talk) {
+        wl_row_label(row, "Talking menu waits");
+        row_choice(row, 1, 3, SMALL_3, "For a key\n10 seconds\n20 seconds\n30 seconds\n60 seconds",
+                   bm_index(bm_waits, 5, bm.talk_wait), bm_wait_cb, NULL);
+        row++;
+    }
+    wl_row_label(row, "Screen menu waits");
+    row_choice(row, 1, 3, SMALL_3, "0 seconds\n1 second\n2 seconds\n3 seconds\n5 seconds\n10 seconds\n15 seconds",
+               bm_index(bm_secs, 7, bm.screen_secs), bm_secs_cb, NULL);
+    row++;
+    wl_row_label(row, "Restart into, once");
+    row_choice(row, 1, 3, SMALL_3, restart, 0, bm_restart_cb, NULL);
+    row++;
+    card_end(row);
+}
+
+static void make_voice_page() {
+    static char voices[VOICES_NUM * 24];
+
+    voices[0] = '\0';
+    for (int i = 0; i < VOICES_NUM; i++) {
+        if (i) strcat(voices, "\n");
+        strcat(voices, voice_item[i].label);
+    }
+
+    grid_create();
+
+    uint8_t row = card_begin("VOICE");
+
+    wl_row_label(row, "Voice mode");
+    row_choice(row, 1, 3, SMALL_3, "Off\nScreen off only\nAlways", cfg_sm.p_voice_mode.get(), voice_mode_cb,
+               &cfg_sm.p_voice_mode);
+    row++;
+    wl_row_label(row, "Voice");
+    row_choice(row, 1, 3, SMALL_3, voices, cfg_sm.p_voice_lang.get(), voice_choice_cb, &cfg_sm.p_voice_lang);
+    row++;
+    for (param_slider_t *p : {&voice_rate_slider, &voice_pitch_slider, &voice_volume_slider}) {
+        const char *name = p == &voice_rate_slider ? "Rate" : p == &voice_pitch_slider ? "Pitch" : "Volume";
+        lv_obj_t   *s;
+
+        wl_row_label(row, name);
+        s = param_slider(row_cell(row, 4, 3, SMALL_3), SMALL_3 - 134, p);
+        lv_obj_add_event_cb(s, voice_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
+        row++;
+    }
+    card_end(row);
+
+    row = card_begin("VOICE BEHAVIOUR");
+    row = make_param_switch(row, "New speech interrupts", cfg_sm.p_voice_interrupt);
+    row = make_param_switch(row, "Read decoded text", cfg_sm.p_voice_read_text);
+    row = make_param_slider(row, "Interrupt delay", &voice_delay_slider);
+    row = make_param_slider(row, "Tuning delay", &voice_fdelay_slider);
+    row = make_param_slider(row, "Name repeats", &voice_repeat_slider);
+    card_end(row);
+    make_startup_card();
 }
 
 /* USB paddle (paddle_keyer.c): what is plugged in, the codes of each source, Learn, Swap.
@@ -5037,6 +5321,11 @@ static uint8_t info_row(uint8_t row, const char *label, const char *val) {
     lv_obj_set_style_text_color(obj, TC(text), 0);
     lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_END, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
     row_dsc[row] = INFO_ROW_H;
+    /* With speech on, a stop of the knob: the row read as the knob passes ("Version, v0.3.12"); it has nothing
+     * to change, the knob goes on to the next */
+    if (voice_is_on()) {
+        dialog_item(&dialog, obj);
+    }
     return row + 1;
 }
 
@@ -5498,7 +5787,7 @@ static void make_info_page() {
     row = card_begin("FIRMWARE");
     row = info_row(row, "Version", strrchr(VERSION, ' ') + 1);
     row = info_row(row, "Project", "OpenX6X00 by RF.Guru");
-    row = info_row(row, "Source", "github.com/Guru-RF/OpenX6X00");
+    row = info_row(row, "Source", "github.com/Jimr9/OpenX6X00-Speech-Access, based on github.com/Guru-RF/OpenX6X00");
     row = info_row(row, "Baseband", radio_base_ver_str());
     if (radio_caps() & HW_CAP_TEST_BASE) {
         row = info_row(row, "", TEST_BASE_NOTE);
@@ -5552,6 +5841,7 @@ static void construct_cb(lv_obj_t *parent) {
         btn_pages[i]->items[0]->next = btn_pages[(i + 1) % 3];
     }
     rail_create();
+    tabs_hint("Settings. Tabs on the F-keys", &btn_page, 1);
     tab_press(&btn_general);
     lv_group_set_focus_cb(keyboard_group, focus_cb);
 }
@@ -5559,6 +5849,7 @@ static void construct_cb(lv_obj_t *parent) {
 static void destruct_cb() {
     lv_group_set_focus_cb(keyboard_group, NULL);
     grid_delete();
+    lv_group_set_focus_cb(keyboard_group, voice_focus_cb);     /* the group's own again (key_input.c) */
 }
 
 /* FINP on the hand mic: in and out of editing, as a long MFK press. ESC closes. */

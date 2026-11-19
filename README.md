@@ -1,3 +1,28 @@
+# OpenX6X00 Speech Access
+
+**This is a fork of [OpenX6X00 by RF.Guru](https://github.com/Guru-RF/OpenX6X00) that adds speech for blind and
+low-vision operators on the Xiegu X6100.** It is not made or supported by RF.Guru: please send speech questions
+here, not to them. Everything below this section is RF.Guru's own README, kept as it is.
+
+What the speech adds:
+
+- Every key, knob, page of F-keys, window, list, setting and message is spoken (RHVoice, six English voices).
+- A tap of the power key reads where the radio is: frequency, mode, VFO, band, time, battery, network address and
+  the F-keys; in a window, the window's text.
+- Holding DFN switches speech between always, only when the screen is dark, and off.
+- Decoded text (CW, RTTY, PSK, JS8, messages) can be read aloud, with callsigns spelled out.
+- Settings > Voice: voice, rate, pitch, volume, and the start-up settings of the multi-boot card.
+- Updates from inside the radio (Settings, Check and Install) come from this fork's releases, signed with its own
+  key, with the same automatic and manual roll-back as the original.
+
+Downloads: [Releases](https://github.com/Jimr9/OpenX6X00-Speech-Access/releases). Instructions:
+[blindsea.com/x6100/openx6x00](https://www.blindsea.com/x6100/openx6x00/). Test sheets: [docs/speech](docs/speech).
+
+The speech comes from the [X6100 Accessibility](https://github.com/Jimr9/X6100-Accessibility-Testing) build for
+OpenX6100. Licence as the original: LGPL-2.1-or-later.
+
+---
+
 # OpenX6X00 by RF.Guru
 
 **Website: [openx6x00.org](https://openx6x00.org/)**

@@ -1,0 +1,34 @@
+OpenX6X00 speech, test 7
+
+Everything from test 6 is in this build (TESTING-speech-test6.txt still applies), plus the screens below.
+Write after each test: OK, silent, or wrong (and what it said).
+ATU tune and SWR sweep can stop speech (the base board's fault): power off and on to get it back.
+
+
+1. Voice keyer interval (MSG in SSB, F1 for page 2, F2 Interval)
+Press F2: "Interval, 10 seconds. Turn the small knob to change, F2 to keep".
+Turn: "9 seconds", "8 seconds"... down to 3. Press F2: "Interval kept, 7 seconds".
+
+2. Settings > Bluetooth (page 2, F2)
+Each device: "Jabra Elite, headphones, connected, 1 of 3", or "new, press to pair".
+
+3. Zello (APPS 17) and SVXConnect (APPS 18)
+The state as it changes: "Zello, Connecting to ...", "Zello, <channel> 12 online".
+Who talks: "Talking now: K1ABC", said when it changes.
+
+4. Propagation (APPS 5), conditions view
+"Propagation, conditions, 12 lines. Small knob: line by line." then the solar data.
+Turn: each line, a band group with its day and night ratings: "80m-40m, day Good, night Fair, 4 of 12".
+
+5. Field Ops activation
+Each QSO logged: "Q S O 5, K 1 A B C".
+
+6. CW Keyboard (APPS 11), with a USB or Bluetooth keyboard
+Each letter typed is said, "space" for a space, "deleted" for backspace (not in Live, where the sidetone tells).
+Turn the small knob: the speed, "22 W P M".
+
+7. Channels (APPS 6), moving a channel
+F5 Drag: "Moving 40 meters net. Turn the small knob to move it, F5 to drop it there".
+Turn: where it goes. F5 Drop: "Dropped at 3 of 8, saved".
+
+8. JS8: a new message is said once (the list following it no longer says it again).

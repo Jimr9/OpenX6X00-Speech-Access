@@ -1,0 +1,20 @@
+OpenX6X00 speech, test 8
+
+Everything from test 7 is in this build (sheets 6 and 7 still apply), plus Walkie.
+Write after each test: OK, silent, or wrong (and what it said).
+
+1. Walkie (APPS number 14)
+Expect: "Walkie screen, the F-keys down the left, F1 at the top", then its page, "WLK page 1. F2 MEM VFO, F3 Band +, F4 Band -, F5 TX power, ...".
+F1 steps the WLK pages: page 2 AM FM, SSB, ATU, PRE; page 3 AGC, A/B, Step, Lock; page 4 Store, Clear, levels, Exit.
+The band, mode, PRE, AGC, A/B and Lock keys speak as on the main screen.
+
+2. Memory channels in Walkie
+F2 (MEM VFO) on page 1: "Memory mode, the tuning knob steps the channels, Channel 1, ..." or "V F O mode, the tuning knob tunes".
+In memory mode, turn the tuning knob: "Channel 3, 145.500, F M", or "Channel 4, empty, Store puts the frequency in it".
+Page 4, F2 Store: "Stored, Channel 4, 14.074, U S B". F3 Clear, held: "Channel 4 cleared".
+
+3. Leaving Walkie
+Page 4, F5 Exit, held: "Walkie off", then the main screen's page.
+
+Screen Rec (APPS number 13) already speaks: "Screen rec on", and "Saved" with the file name when it stops.
+Snake is a game and is left out.

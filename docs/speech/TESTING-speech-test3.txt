@@ -1,0 +1,224 @@
+OpenX6X00 speech, test 3
+
+One sheet for everything in this build. Go through what you can, in any order, and write after each test: OK, silent, or wrong (and what it said).
+If something is silent or wrong, do not power off: the radio keeps a speech log in memory that I can read once it is on WiFi (part B).
+
+
+HOW TO GET AROUND IN THIS BUILD
+
+- Small knob (MFK): moves through rows, lists, keys and menus. Press it to choose.
+- VOL knob: turning sets the volume. Pressing it is your ESC (new in this build): it backs out of a menu or a list, and closes the window you are in. On the main screen, pressing it switches VOL between changing the volume and choosing what VOL controls.
+- GEN, APP, KEY, DFN, DFL: each one closes the window you are in and shows its F-key pages. Each tap steps to its next page.
+- The page names you will hear:
+  - GEN: "VOL page 1", "VOL page 2", then "MFK page 1" to "MFK page 4".
+  - APP: "APP page 1" to "APP page 6".
+  - KEY: "KEY page 1", "KEY page 2", then "CW page 1", "CW page 2".
+  - DFN: "DFN page 1" to "DFN page 3".
+  - DFL: "Filter page".
+  - V/M: "MEM page 1", "MEM page 2".
+- When a window closes you hear "Closed", then the F-key page that comes back.
+- Power key, tapped: reads the screen (where the radio is, or the open window's text). Held: turns the radio off.
+
+
+PART A: THE MAIN SCREEN
+
+A1. Power on
+Expect: "Open X 6 X hundred ready". Later, once WiFi has joined a network: "WiFi connected, address 192 dot 168 dot ...".
+On a freshly flashed card the first-start guide comes up first: see part C.
+
+A2. Screen saver wake
+Leave the radio alone for 5 minutes. Then turn the VOL knob one step.
+Expect: "Volume, 12" (your level). The first turn is no longer swallowed.
+
+A3. VOL knob pressed
+Press it once.
+Expect: "VOL, choose, Volume, 12". Turn it one step.
+Expect: another control's name and value, for example "RF gain, 100". Each step names the next.
+Press it again.
+Expect: "VOL, change, RF gain, 100" (whichever control you stopped on). Turning now changes that control.
+Choose Volume again before you leave it, or VOL keeps changing the other control.
+
+A4. Small knob (MFK) pressed
+Press it once.
+Expect: "M F K, choose, Zoom, x1" (or whatever it is on). Turn it: each control by name and value.
+Press it again.
+Expect: "M F K, change, ..." and turning changes that control.
+
+A5. DFL key
+Tap.
+Expect: "Filter page". F1 to F4: filter low, filter high, bandwidth, step.
+
+A6. DFN key, then F5
+Tap DFN until "DFN page 1". Press F5.
+Expect: "DNF auto, On" or "Off". (Silent in test 2. If still silent, tell me.)
+
+
+PART B: WIFI (so the radio is on your network)
+
+B1. Open Settings
+Tap APP, turn the small knob to "Settings, All settings, 23 of 23" and press it.
+Or: tap APP until "APP page 2", then F2.
+Expect: "Settings", then the first row.
+
+B2. The Wireless tab
+In Settings, turn the small knob to the tabs on the left and find "Wireless". Press it, then turn to the network rows.
+Expect, for each network: its name, connected or not, saved or not, secured or open, the signal in percent, and its place, for example "HomeNet, secured, signal 70 percent, 1 of 4".
+
+B3. Join your network
+Press the small knob on your network.
+Expect: a menu, for example "HomeNet, menu, Connect, 1 of 2". Turn: each choice. Press on Connect.
+For a secured network a password window opens.
+Expect: "Password for HomeNet. Small knob: the keys, press: type, done: finish", then the keyboard and the key the knob is on.
+
+B4. Typing on the on-screen keyboard
+Turn the small knob: each key is said, for example "cap Q", "W", "backspace", "space".
+Capitals are said with "cap". The key "A B C" or "a b c" switches between upper and lower case, "1 #" to numbers and symbols.
+Symbols are said by name: "dot", "dash", "underscore", "at" and so on.
+Press the small knob to type the key: the key is said again as it is typed.
+When done, find "done" (the tick) and press it.
+Expect, a few seconds later: "WiFi connected, address 192 dot 168 dot ...". Write the address down for me.
+
+B5. Leaving a menu or the keyboard
+In the menu or on the keyboard, press VOL.
+Expect: it closes without doing anything.
+
+
+PART C: THE FIRST-START GUIDE
+
+You only see this on a freshly flashed card, or from Settings > General > STATION > First-start guide.
+
+C1. Each step
+Expect, at each step: "First start, step 1 of 5, Language", its explanation, which F-keys do what ("F2 language, F4 skip, F5 next"), then the choice the knob is on.
+F1 back (from step 2), F2 the step's own action, F3 locator (the callsign step only), F4 skip, F5 next.
+
+C2. Skipping it
+Press VOL twice quickly.
+Expect: the guide closes.
+
+
+PART D: APPS AND MODES
+
+D1. APP key: the apps grid
+Expect: "Apps, Modes, F T 8, J S 8, P S K, S S T V, 1 of 23". Turning: each app. Press: opens it. VOL: closes it.
+
+D2. Modes
+In the apps grid, press the small knob on Modes.
+Expect: "Digital modes, R T T Y, 45 bd, 1 of 14". Turning: each mode.
+
+D3. FT8
+In Digital modes, turn to FT8 and press.
+Expect: "F T 8". Then, while it receives:
+- After each 15-second period, a short count: "3 C Q, 5 other", or "4 C Q".
+- A message for you, at once: "For you: W 1 X Y Z, K 1 A B C, minus 10".
+Turn the small knob through the list.
+Expect: each row with callsigns and grids spelled out, the country, for a CQ whether you worked them ("new", "worked"), and its place: "C Q, K 1 A B C, F N 4 2, United States, new, 7 of 12".
+Press VOL or GEN to close FT8.
+
+D4. MSG key (in SSB): the voice keyer
+Expect: "Voice keyer. Small knob: the messages, press: listen. F2 record, F3 listen, F4 send, F5 auto call", then the first message, or "No messages yet".
+Turn the small knob: each message, its length and place: "CQ, 4.5 seconds, 1 of 3".
+Listening: "Listening", then "Ready" when done.
+Recording: nothing is said while it records, so your recording stays clean.
+Press VOL to close it.
+
+D5. MSG key (in CW mode): CW messages
+Expect: "CW messages. Small knob: the messages. F2 send, F3 new, F4 edit", then the first message with callsigns spelled out: "C Q, C Q, D E, K 1 A B C, 1 of 4".
+Turn the small knob: each message. Press VOL to close it.
+
+D6. Channels (memories)
+Open Channels from the apps grid (number 6), or with V/M on the hand mic.
+Turn the small knob: each channel, "40 meters net, 7.150, L S B", or "7.074, U S B" when it has no name.
+With no channels: "No channels. F2 adds the current frequency".
+Press the small knob to tune a channel (the window closes).
+
+D7. SWR scan (transmits: antenna or dummy load on)
+Open SWR Scan from the apps grid (number 8). F1 is Run and Stop, F2 Scale, F3 Span.
+F3: the span, "Span, 100 kHz".
+Press F1 to start: nothing is said while it scans, because it transmits a carrier.
+Press F1 again to stop.
+Expect: "Stopped, lowest S W R 1.3 at 14.150, highest 2.8 at 14.350".
+
+D8. Decoded text read aloud (CW decoder, RTTY, PSK31, PSK63, Olivia, JTTY, NavTex)
+What these decoders receive is read aloud in bursts, at each pause or line end, with callsigns spelled out.
+A burst waits for the one before it to finish. A knob or key still cuts it short.
+Try CW with the decoder on, or PSK31 from Digital modes, on a busy frequency.
+Expect: the decoded text read, for example "C Q, C Q, D E, K 1 A B C, K".
+On a noisy band the decoders print rubbish and it gets read too: turn it off in Settings > Voice > VOICE BEHAVIOUR > "Read decoded text".
+
+D9. JS8
+From Digital modes. Expect: a message for you at once, "For you, from K 1 A B C: ..."; other messages read in turn, "From K 1 A B C: ...". Same switch as D8.
+
+D10. Scanner
+From the apps grid (number 7). F3 starts, pauses and resumes it; F2 chooses what it scans; F4 skips. It needs channels to scan.
+Expect: "Scanning", then on a busy channel "Busy, 40 meters net, 7.150, L S B"; "Paused, ..." and "Scanner stopped" as they happen.
+
+D11. DX Cluster
+From the apps grid (number 2). Needs WiFi.
+Expect: "DX cluster. Small knob: the spots, press: tune". Turning: each spot, "K 1 A B C, 14.025, up 2, spotted by W 1 A W, 3 of 40". Press the small knob to tune it.
+
+D12. Recorder
+From the apps grid (number 9). F1 Rec: anything still being said stops, and nothing is said while it records. Stopping: "RX recorder is off". The file list reads each file as you turn.
+
+D13. SSTV
+From Digital modes. Expect: "Receiving picture, Martin 1" (or the mode) when a picture starts, then "SSTV picture ... saved", or "Decoding failed".
+
+D14. NavTex DSC calls
+NavTex in its DSC mode: each call received is said, "D S C call, ALL SHIPS, ...".
+
+D15. Read the screen: the power key
+Tap the power key (do not hold it).
+On the main screen, expect where the radio is: "14.074, U S B, VFO A, 20 meters, 10:42, battery 80 percent".
+In any window, expect all of that window's text read top to bottom. Use it in the apps that are not wired yet.
+With speech on, the tap no longer turns the screen off. Holding it still turns the radio off.
+
+D16. Other apps
+Any other app: you hear its name, and a short description of where the knob is. Their own screens are not wired for speech yet. Tell me which ones you want next.
+
+
+PART E: THE HAND MIC (if you use one)
+
+E1. Number keys
+Tap a number: the band printed on it. Expect: "20 meters, 14.074, U S B".
+Hold a number (1 to 9): that memory. Expect: "Loaded from memory 3".
+
+E2. MODE
+Tap: the next mode. Expect: "L S B", "U S B", "C W" and so on.
+
+E3. XFC
+Tap: the other VFO. Expect: "VFO B, 14.074".
+
+E4. TUNER
+Tap: "ATU on" or "ATU off".
+
+E5. UP and DOWN
+Tap: the next or previous channel. Expect: "Channel 40 meters net, 7.150", or "No channels".
+
+E6. A/B on the radio, held
+Expect: "VFO A copied to B".
+
+
+PART F: TRANSMIT
+
+F1. PTT, with a dummy load or an antenna
+Hold PTT while something is being said.
+Expect: the speech stops at once, nothing is said while transmitting. Let go: receive audio and speech come back.
+
+
+WHAT IS NEW IN TEST 3, FOR REFERENCE
+- VOL press is ESC in windows; "Closed" when a window closes.
+- VOL and small-knob presses say "choose" or "change", with the control's name.
+- DFL says "Filter page".
+- The IP address is said when WiFi connects.
+- The WiFi window and Settings > Wireless: networks with signal, saved, secured; the action menu; the password.
+- The on-screen keyboard: each key as you move, each key as you type.
+- The first-start guide reads each step.
+- FT8: the list, messages for you, a count after each period.
+- The voice keyer (MSG): its messages and states, and silence while recording.
+- CW messages (MSG in CW) and Channels: each entry read.
+- Any list: the first knob step reads the first row (it was silent).
+- Hand mic: band keys, MODE, XFC, TUNER, UP and DOWN; A/B held.
+- SWR scan: the result after Stop; nothing is said during the scan or an ATU tuning cycle.
+- Decoded text read aloud (CW, RTTY, PSK, Olivia, JTTY, NavTex), with a switch in Settings > Voice.
+- JS8 messages, the Scanner, the DX Cluster, the Recorder, SSTV, NavTex DSC calls.
+- The power key's tap reads the screen.
+- Windows not wired yet: their title only, not every label on them.

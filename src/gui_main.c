@@ -78,6 +78,8 @@
 #include "app_sstv.h"
 #include "walkie.h"
 #include "winlink.h"
+#include "bootmenu.h"
+#include "voice.h"
 #include "first_start.h"
 #include "perf_hud.h"
 
@@ -519,6 +521,17 @@ int main(void) {
     lv_timer_set_repeat_count(lv_timer_create(settings_keep_cb, 60000, NULL), 1);
     dialog_field_wavelog_start();
     first_start_init();     /* a new card or a settings reset: the guide, once the screen is up */
+    /* Spoken feedback (voice.cpp): no window of this GUI announces itself, so the helper that reads focus
+     * changes, messages and F-key presses is on everywhere (off while transmitting) */
+    voice_auto_set(true);
+    {
+        bootmenu_t bm;
+
+        if (bootmenu_read(&bm) && bm.self)
+            voice_say_text_fmt("Open X 6 X hundred ready. Boot menu key F%i", bm.self);
+        else
+            voice_say_text_fmt("Open X 6 X hundred ready");
+    }
     gui_loop();
     return 0;
 }

@@ -11,6 +11,9 @@
 
 #define _GNU_SOURCE     /* pthread_setname_np */
 #include "js8_window.h"
+#include "voice.h"
+#include "voice_focus.h"
+#include "voice_text.h"
 #include "band_plan.h"
 #include "board.h"
 #include "ghostnet.h"
@@ -670,7 +673,9 @@ static void select_row(uint16_t r)
         static uint32_t down = LV_KEY_DOWN;
         tbl->row_act         = r - 1;
         auto_selecting       = true; /* the VALUE_CHANGED this sends is not the user's */
+        voice_focus_mute(true);       /* nor said: say_message() said the message */
         lv_event_send(table, LV_EVENT_KEY, &down);
+        voice_focus_mute(false);
         auto_selecting       = false;
         return;
     }
@@ -881,9 +886,28 @@ static bool ghostnet_traffic(const js8_rx_msg_t *m) {
     return ghostnet_is_group(m->to) || (params.js8_ghostnet.x && !params.js8_custom_on.x);
 }
 
+/* Spoken: a whole message received. For this station at once, "For you, from K 1 A B C: ..."; the others through
+ * the decoded-text reader, in turn (Settings > Voice > Read decoded text) */
+static void say_message(const js8_rx_msg_t *m)
+{
+    char from[48], body[300], line[400];
+
+    if (m->tx || m->partial || !m->text[0]) return;
+    voice_spell_calls(m->from, from, sizeof(from));
+    voice_clean_text(m->text, body, sizeof(body));
+    if (m->to[0] && params.callsign.x[0] && strcasecmp(m->to, params.callsign.x) == 0) {
+        if (voice_auto_active()) voice_say_text_fmt("For you, from %s: %s", from, body);
+        return;
+    }
+    snprintf(line, sizeof(line), "From %s: %s", m->from, m->text);
+    voice_text_message(m->msg_id, line, true);
+}
+
 static void add_message(const js8_rx_msg_t *in)
 {
     js8_rx_msg_t m = *in;
+
+    say_message(&m);
 
     int growing = -1;
     if (!m.tx) growing = find_partial(m.msg_id);

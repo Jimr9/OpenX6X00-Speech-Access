@@ -25,6 +25,7 @@
  */
 
 #include "dialog_cw_trainer.h"
+#include "voice.h"
 #include "board.h"
 
 #include "buttons.h"
@@ -961,6 +962,19 @@ static void show(lv_obj_t *o, bool on) {
     else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
 }
 
+/* "KMR" said "K M R": one character at a time, never read as a word */
+static void spaced(const char *in, char *out, size_t size) {
+    size_t n = 0;
+
+    out[0] = 0;
+    for (; in && *in && n + 10 < size; in++) {
+        if (*in == CWT_NO_CHAR)
+            n += snprintf(out + n, size - n, "%sunknown", n ? " " : "");
+        else
+            n += snprintf(out + n, size - n, "%s%c", n ? " " : "", *in);
+    }
+}
+
 /* 2115 -> "2 115" */
 static void fmt_num(uint32_t v, char *out, size_t size) {
     if (v >= 1000000) snprintf(out, size, "%u %03u %03u", (unsigned)(v / 1000000), (unsigned)(v / 1000 % 1000), (unsigned)(v % 1000));
@@ -1008,6 +1022,26 @@ static void refresh_calls(void) {
     }
     lv_obj_set_style_text_color(c_res, lv_color_hex(last_ok ? COLOR_OK : COLOR_BAD), 0);
     lv_label_set_text(c_res, buf);
+    {
+        static int said_done = -1;
+
+        if (!rev) {
+            said_done = -1;
+        } else if (done != said_done && voice_auto_active()) {
+            char sp[64], fin[48] = "";
+
+            said_done = done;
+            spaced(target, sp, sizeof(sp));
+            if (run_done) {
+                fmt_num(score, n1, sizeof(n1));
+                snprintf(fin, sizeof(fin), ". Run complete, score %s", n1);
+            }
+            if (last_ok)
+                voice_say_text_fmt("Right, %i W P M%s", next_wpm, fin);
+            else
+                voice_say_text_fmt("Wrong, it was %s, %i W P M%s", sp, next_wpm, fin);
+        }
+    }
     if (run_done && rev) lv_label_set_text(hint, "Start: a new run of 50 callsigns");
     else if (rev && strchr(heard, CWT_NO_CHAR)) lv_label_set_text(hint, CWT_NO_CHAR_SHOWN " = not a character. Right: +1 WPM, wrong: -1 WPM.");
     else if (tx_fixed())
@@ -1161,7 +1195,21 @@ static void refresh_ui(void) {
             group_line(line1, "Sent:   ", theme_hex(TC_accent), target, target);
             if (heard[0]) group_line(line2, "Heard: ", theme_hex(TC_text), shown, heard);
             break;
-        case ST_RESULT:
+        case ST_RESULT: {
+            static int said_tried = -1;
+
+            if (tried != said_tried && voice_auto_active()) {
+                char sp1[64], sp2[64];
+
+                said_tried = tried;
+                spaced(target, sp1, sizeof(sp1));
+                spaced(heard, sp2, sizeof(sp2));
+                if (last_ok)
+                    voice_say_text_fmt("Right");
+                else
+                    voice_say_text_fmt("Wrong, sent %s, heard %s", sp1, sp2[0] ? sp2 : "nothing");
+            }
+        }
             lv_label_set_text(big, last_ok ? "OK" : "WRONG");
             lv_obj_set_style_text_color(big, lv_color_hex(last_ok ? COLOR_OK : COLOR_BAD), 0);
             group_line(line1, "Sent:   ", theme_hex(TC_accent), target, target);

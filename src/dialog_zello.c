@@ -19,6 +19,7 @@
  *  Copyright (c) 2026 Joeri Van Dooren ON6URE / Guru-RF
  */
 #include "dialog_zello.h"
+#include "voice_focus.h"
 
 #include "board.h"
 #include "buttons.h"
@@ -391,6 +392,12 @@ static void status_cb(lv_timer_t *t) {
         lv_label_set_text(talk_lbl, "");
     }
     refresh_buttons();
+    {
+        static char said_state[200], said_talk[200];
+
+        voice_say_label_change(state_lbl, said_state, sizeof(said_state), "Zello");
+        voice_say_label_change(talk_lbl, said_talk, sizeof(said_talk), NULL);
+    }
 }
 
 static int selected(void) {

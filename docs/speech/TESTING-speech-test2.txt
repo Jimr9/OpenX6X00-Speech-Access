@@ -1,0 +1,93 @@
+OpenX6X00 speech, test 2
+
+What changed since test 1:
+- When the screen had gone dark or the screen saver was on, the first key press or knob turn only woke the screen and did nothing else. That is why single steps of the VOL and small knobs were silent. With speech on, that first press or turn now acts too.
+- The volume is spoken wherever it changes: the main screen, the apps, and the first-start guide.
+- The APPS screen and the Digital modes screen read one item at a time, with its place, for example "Cluster, DX spots, 2 of 23". They no longer read the whole list at once.
+- This build keeps a speech log in the radio's memory (/tmp/voice.log). It is gone when you power off. If something is silent, do not power off: I can read the log over SSH.
+
+Write your result after each test, as before: OK, silent, or wrong (and what it said).
+Before you start, leave the radio alone for 5 minutes so the screen saver comes on. Test 1 then also checks the wake-up fix.
+
+
+1. VOL knob, turned (after the 5 minutes)
+Turn it one step.
+Expect: "Volume, 12" (your level).
+says number working
+
+2. VOL knob, pressed
+Press it once.
+Expect: "Volume, 12" again. VOL is now in choosing mode. Turn it one step.
+Expect: the name and value of another control. Each step names the next one.
+Press VOL again to go back to changing the volume.
+it says 25 a bunch of times then volume 25 then back to 25 a bunch of times
+
+3. Small knob (MFK), turned
+Turn it one step.
+Expect: the name and value of the control it is on.
+says a name and value
+
+4. Small knob (MFK), pressed
+Press it once, then turn it one step.
+Expect: the name of the next control and its value. Each step names the next one.
+Press it again to go back to changing the value.
+acts like the volume but it says full name then short name and number then short name and number a bunch of times like the volume knob
+
+5. V/M key (top of the radio)
+Tap.
+Expect: the F-keys go to the memory page, and its page name is spoken.
+
+6. APP key
+Tap.
+Expect: "Apps, Modes, F T 8, J S 8, P S K, S S T V, 1 of 23" (roughly).
+Turn the small knob one step at a time.
+Expect: each app's name, what it is, and its number, for example "Cluster, DX spots, 2 of 23".
+Press APP again to close it.
+worked
+
+7. Digital modes
+Press APP, stay on "Modes" (number 1), press the small knob.
+Expect: "Digital modes, R T T Y, 45 bd, 1 of 14" (roughly).
+Turn the small knob: each mode, for example "P S K 31, 31 bd, 3 of 14".
+Press ESC to close it without opening anything.
+working
+could not find escape pushed in bop knob did not escape
+pushed twice fast did not work
+
+8. GEN key and F1 to F5
+Tap GEN until you hear "GEN page 1". Press F1 to F5 one at a time. Write down what each one says.
+Then tap GEN again for page 2, and do the same.
+could not ind gen key all the 6 pack talk but the bottom right one
+
+9. KEY, DFN, DFL keys
+Tap each one. Expect its page name. Write down what F1 to F5 say on one of those pages.
+dfn page 1
+f1 fnd page 2 tapping that to get back to page 1
+3 back to 1
+f2dnf on/off
+f3
+dnf center 1000 ?hz
+f4 dnf something something hz
+f5 says nothing
+
+10. MSG key
+In SSB: opens the voice messages window. Expect its name, then what the knob is on. Press ESC to close it.
+if that is middle six pack right said something voice something text text text
+
+11. Settings
+Find the F-key that says "Settings" in test 8, or press APP and choose Settings (number 23).
+Expect: "Settings", then the first row.
+Turn the small knob: each row's name and its value.
+Press ESC to go back.
+again no escape key
+
+12. PTT, with a dummy load or an antenna
+Hold PTT while something is being said.
+Expect: the speech stops at once, nothing is said while transmitting. Let go: receive audio and speech come back.
+working
+
+
+NOT EXPECTED TO TALK YET
+The apps' own screens (FT8, CW, Field Ops, Winlink and the others): only their name and the focused item.
+The first-start guide does not read its steps well yet.
+A tap of the power key (screen off and on).

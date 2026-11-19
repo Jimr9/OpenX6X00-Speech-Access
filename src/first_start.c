@@ -38,6 +38,8 @@
 #include "qth/qth.h"
 #include "radio.h"
 #include "screen_main.h"
+#include "voice.h"
+#include "voice_focus.h"
 #include "settings_window.h"
 #include "station.h"
 #include "text_popup.h"
@@ -239,9 +241,22 @@ static lv_obj_t *text(lv_obj_t *parent, const lv_font_t *font, lv_color_t color,
     return l;
 }
 
+/* What the step says aloud as it opens: its number, title and paragraphs (build(), para()) */
+static char step_said[760];
+
+static void step_said_add(const char *s) {
+    size_t n = strlen(step_said);
+
+    if (s && s[0] && n + 3 < sizeof(step_said)) {
+        snprintf(step_said + n, sizeof(step_said) - n, "%s%s", n ? ". " : "", s);
+    }
+}
+
 /* A line across the window, wrapped */
 static lv_obj_t *para(const lv_font_t *font, lv_color_t color, const char *s) {
     lv_obj_t *l = text(body, font, color, s);
+
+    step_said_add(s);
 
     lv_obj_set_width(l, lv_pct(100));
     lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
@@ -878,6 +893,15 @@ static void build(void) {
         lv_label_set_text_fmt(text(head, &sony_20, TC(text_dim), ""), "%i / %i", step + 1, STEP_DONE);
     }
     text(body, &sony_30, TC(text), titles[step]);
+    step_said[0] = '\0';
+    if (step < STEP_DONE) {
+        char head_said[96];
+
+        snprintf(head_said, sizeof(head_said), "First start, step %i of %i, %s", step + 1, STEP_DONE, titles[step]);
+        step_said_add(head_said);
+    } else {
+        step_said_add(titles[step]);
+    }
 
     switch (step) {
         case STEP_LANG:     build_lang(); break;
@@ -895,6 +919,20 @@ static void build(void) {
         lv_group_remove_obj(dialog.obj);
     }
     lv_group_set_editing(keyboard_group, false);
+    /* Said with the control focused next: "First start, step 1 of 5, Language. <the text>. Language, English" */
+    {
+        char keys[128];
+        const char *a1 = act1_label(), *a2 = act2_label();
+
+        snprintf(keys, sizeof(keys), "%s%s%s%s%s%sF4 skip, F5 %s", step > STEP_LANG ? "F1 back, " : "",
+                 a1[0] ? "F2 " : "", a1, a1[0] ? ", " : "", a2[0] ? "F3 locator, " : "", "",
+                 step < STEP_DONE ? "next" : "done");
+        if (step >= STEP_DONE) {
+            snprintf(keys, sizeof(keys), "F5 done");
+        }
+        step_said_add(keys);
+    }
+    voice_focus_hint(step_said);
     lv_group_focus_obj(items_n ? items[focus_back < items_n ? focus_back : 0] : dialog.obj);
     focus_back = 0;
     for (int i = 0; i < BUTTONS; i++) {

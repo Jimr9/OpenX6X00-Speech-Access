@@ -1,0 +1,155 @@
+OpenX6X00 speech, test 1: what to press and what you should hear
+
+Key names are the ones printed on the radio, the same keys as in our own build.
+Do every test from the main screen, with nothing open. If something is open, press ESC, or press the VOL knob, until you are back.
+After each test, note one of three results: OK, silent, or wrong (and what it said).
+
+
+PART 1: THE KNOBS
+
+1. Main tuning knob (the big one)
+Turn it a few steps, then stop.
+Expect: about one second after you stop, the frequency, for example "14.074".
+working
+
+2. VOL knob, turned
+Turn it one step.
+Expect: "Volume, 12" (your level). Turning on says only the number after a few steps; every few announcements the name comes back.
+on power on it don't talk
+
+3. VOL knob, pressed
+Press it once.
+Expect: "Volume, 12" again. VOL is now in choosing mode. Turn it one step.
+Expect: the name and value of another control, for example "Squelch, 0". Each step names the next one.
+Press VOL again to go back to changing the value.
+pressing vol knob did nothing
+
+4. MFK knob (the small knob), turned
+Turn it one step.
+Expect: the name and value of the control it is on, for example "Filter low, 100". Every few announcements the name comes back.
+nothing
+
+5. MFK knob, pressed
+Press it once, then turn it one step.
+Expect: the name of the next control and its value. Each step names the next one.
+Press it again to go back to changing the value.
+nothing
+
+
+PART 2: THE KEYS ON THE TOP OF THE RADIO
+
+6. SSB key
+Tap: switches between L S B and U S B, and says which.
+Hold: digital on or off, for example "U S B digital".
+working
+
+7. CW key
+Tap: "C W", or "C W reverse" on the next tap.
+working
+
+8. AM key
+Tap: "A M", or "N F M" on the next tap.
+working
+
+9. BAND up, BAND down
+Tap: the band, the frequency and the mode, for example "20 meters, 14.074, U S B".
+working
+
+10. PRE key
+Tap: "Pre on" or "Pre off".
+Hold: "Att on" or "Att off" (the attenuator).
+working
+
+11. AGC key
+Tap: the next AGC setting, for example "AGC Fast".
+Hold: split on or off, it should say "Split" with the VFO.
+working
+
+12. ATU key
+Tap: "ATU on" or "ATU off".
+Hold: starts a tuning cycle. It transmits, so do it only with an antenna on. Nothing may be said here; tell me.
+working
+
+13. A/B key
+Tap: the VFO and its frequency, for example "VFO B, 14.074".
+working
+
+14. F/S key
+Tap: the tuning step, for example "Freq step, 100 Hz".
+working
+
+not sure of  this key for 15 not tested
+15. V/M key
+Tap: the F-keys go to the memory page. Expect its page name.
+
+16. LOCK key
+Tap: "Dial locked". Tap again: "Dial unlocked".
+Do not hold it: held for several seconds it restarts the radio's base board.
+working
+
+
+PART 3: THE KEYS ON THE FRONT
+
+17. GEN key
+Tap: the F-keys change to the next GEN page, and it says the page, for example "GEN page 2".
+Each tap steps to the next GEN page.
+
+18. F1 to F5 (below the screen)
+These are not the same buttons as in our build, so what they say will differ from what you know. That is expected.
+Press GEN until you hear "GEN page 1". Then press F1, F2, F3, F4 and F5 one at a time, and write down what each one says.
+Expect: either what the button did (for example "Spectrum ...") or the button's name. A greyed out button says its name and "unavailable".
+Tell me any that say nothing, or say something you cannot make sense of.
+apps page then a bun of different sounds like modes like  different protocols and things waiting until it finished pressed again heard app page 1
+f1 goes through app pages not always in order around page 4 and 5 
+f2 read all the digital modes
+f3 text text follow and a few other things
+f4 mode cw
+f5 app page 1
+
+
+stopping here
+19. KEY, DFN, DFL keys
+Tap: the F-keys change to that key's page, and it says the page name.
+Then try F1 to F5 on one of those pages, as in 18.
+
+20. APP key
+Tap: the APPS screen opens, a grid of apps.
+Known problem: right now it reads a long list of all of them at once. I will fix that.
+Turn the MFK: it should name each app as you move. Press APP or ESC to close it without opening anything.
+
+21. MSG key
+In SSB: opens the voice messages window. In CW: opens the CW messages window.
+Expect its name, then what the knob is on. Press ESC to close it.
+
+22. Power key
+Tap: turns the screen off or on. Nothing is said. That is expected.
+Hold: the radio shuts down. It says "Power off".
+
+
+PART 4: SETTINGS
+
+23. Open Settings
+Settings is on one of the GEN pages. Use the F-key that says "Settings" in test 18.
+Expect: "Settings", then the first row.
+Turn the MFK: each row's name and its value.
+Press the MFK on a row to change it, turn to choose, press again to keep it.
+Press ESC to go back.
+
+24. The Voice tab
+In Settings, page 3 of the tabs has "Voice". It holds the voice mode, which voice, rate, pitch, volume, and the delays.
+Expect: each one read with its value, and changes read as you make them.
+
+
+PART 5: TRANSMIT
+
+25. PTT, with a dummy load or an antenna
+Hold PTT while something is being said.
+Expect: the speech stops at once, and nothing is said while transmitting.
+Let go: receive audio and speech come back.
+
+
+NOT EXPECTED TO TALK YET
+
+The apps (FT8, CW, Field Ops, Winlink and the others): only their name and the focused item.
+The first-start guide: it changes the volume silently, and it does not read its steps well yet.
+The power key tap.

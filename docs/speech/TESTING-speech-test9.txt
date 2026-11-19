@@ -1,0 +1,62 @@
+Multi-boot card test 2 with OpenX6X00 speech test 9
+
+Flash x6100-multiboot-test2.img.zip from Downloads. It needs an 8 GB card or bigger.
+Write after each test: OK, silent, or wrong (and what it said).
+
+
+Part A. Power-on and the talking menu
+
+1. Power on and press nothing.
+For about 3 seconds the screen menu shows, silently. Then the talking menu starts, about 10 to 15 seconds after power-on.
+Expect: "Boot menu. Press F1 for X 6 1 hundred Access, version 1 point 2, with speech. Press F2 for Open X 6 X hundred, with speech. Press F3 for ... the original, no speech. Press F4 for ... the original, no speech."
+Then: "If no key is pressed, F1 starts by itself."
+It is a different voice from the radio's: the Windows voice, recorded.
+Note how long after power-on the first words came.
+
+2. Press F2 while it talks.
+Expect: it stops, says "Starting Open X 6 X hundred, with speech. Please wait.", and the radio restarts.
+The screen menu does not wait this time: F2 starts straight away.
+About half a minute later: "Open X 6 X hundred ready. Boot menu key F2."
+
+3. Power off, power on, press nothing at all.
+Expect: the choices once, then after about 30 seconds "Starting X 6 1 hundred Access ...", and our v1.2.0 build comes up.
+
+4. Power on, and at the talking menu press F3, then another time F4.
+Expect: the original builds start. They have no speech, so you only hear them as a sighted helper sees them.
+
+5. At the talking menu, press F5.
+Expect: the choices said again from the top (F5 is the talking menu itself).
+
+6. At the talking menu, press the power button.
+Expect: "Power off." and the radio switches off.
+
+7. Holding a key at power-on still works as before: hold F2 and power on, and F2 starts without the talking menu.
+
+8. Too loud or too quiet? Tell me. I can change the menu's volume.
+
+
+Part B. OpenX6X00 speech, test 9 (F2)
+
+9. Speech mode on DFN, held.
+DFN is the key that says "DFN page 1" when tapped. Hold it down instead.
+Each hold steps to the next mode:
+"Speech when the screen is off", then "Speech always", then "Speech off. Tap power to hear where the radio is, hold D F N for speech again".
+In "Speech off", turn the knobs and press keys: no speech.
+Tap power: it still reads the frequency, mode, battery and the rest.
+Hold DFN again to step back to "Speech always".
+
+10. Start-up settings: Settings, Voice tab, at the bottom, a card "START-UP (THIS BUILD IS F2)".
+Rows:
+- At power-on: Talking menu, or The default build.
+- Default build: F1 to F4. What starts when nobody presses a key.
+- Talking menu waits: For a key, 10, 20, 30 or 60 seconds.
+- Screen menu waits: 0 to 15 seconds. The silent menu before the talking menu.
+- Restart into, once: choose a build, the radio says "Restarting into F1, ... The default stays as it is", and restarts into it.
+Each change is said: "Saved".
+Try: Default build F2, then power off and on and press nothing. After the talking menu, F2 should start.
+Try: At power-on, The default build. Power off and on: no talking menu, the default starts after the screen menu's seconds.
+Put both back the way you like them.
+
+11. Decoded-text noise.
+With the CW decoder on and "Read decoded text" on, the noise like "t t t t" or "e e e" should no longer be read.
+Real text with short words in it is still read.

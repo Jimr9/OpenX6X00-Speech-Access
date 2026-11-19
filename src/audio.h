@@ -46,6 +46,7 @@ typedef enum {
     AUDIO_USER_STATION,     /* the Internet radio (dialog_iradio.c), through audio_listen_* */
     AUDIO_USER_ZELLO,       /* a voice link: Zello's channel (zello.c) */
     AUDIO_USER_SVX,         /* a voice link: SVXConnect's */
+    AUDIO_USER_SPEECH,      /* spoken feedback (voice.cpp): a claim only, RHVoice plays on a stream of its own */
     AUDIO_USERS
 } audio_user_t;
 

@@ -124,7 +124,7 @@ params_t params = {
     .long_app               = ACTION_APP_RECORDER,
     .long_key               = ACTION_NONE,
     .long_msg               = ACTION_RECORDER,
-    .long_dfn               = ACTION_NONE,
+    .long_dfn               = ACTION_VOICE_MODE,    /* speech: always, screen off only, off (as the X6100 Access build) */
     .long_dfl               = ACTION_NONE,
     .long_fst               = ACTION_STEP_DOWN, /* as before it could be set; the stock firmware locks the dial */
 
