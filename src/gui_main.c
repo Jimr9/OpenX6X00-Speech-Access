@@ -524,14 +524,8 @@ int main(void) {
     /* Spoken feedback (voice.cpp): no window of this GUI announces itself, so the helper that reads focus
      * changes, messages and F-key presses is on everywhere (off while transmitting) */
     voice_auto_set(true);
-    {
-        bootmenu_t bm;
-
-        if (bootmenu_read(&bm) && bm.self)
-            voice_say_text_fmt("Open X 6 X hundred ready. Boot menu key F%i", bm.self);
-        else
-            voice_say_text_fmt("Open X 6 X hundred ready");
-    }
+    /* which boot menu key starts this build is in Settings > Voice > START-UP, not said at every start */
+    voice_say_text_fmt("Open X 6 X hundred ready, speech enabled");
     gui_loop();
     return 0;
 }
