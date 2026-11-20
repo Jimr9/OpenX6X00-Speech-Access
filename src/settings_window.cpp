@@ -149,7 +149,11 @@ static void tabs_hint(const char *head, buttons_page_t *pg, int num) {
             n += snprintf(s + n, sizeof(s) - n, "%s F%d %s", i == 1 ? "" : ",", i + 1, pg->items[i]->label);
         }
     }
-    snprintf(s + n, sizeof(s) - n, ". F1 more tabs");
+    /* the page's first tab opens with it: named, then its first row ("... F1 more tabs. Info tab. Version, ...") */
+    if (pg->items[1] && pg->items[1]->label)
+        snprintf(s + n, sizeof(s) - n, ". F1 more tabs. %s tab", pg->items[1]->label);
+    else
+        snprintf(s + n, sizeof(s) - n, ". F1 more tabs");
     voice_focus_hint(s);
     tabs_said = true;
 }
