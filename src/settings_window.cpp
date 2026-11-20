@@ -3682,7 +3682,11 @@ static void bm_secs_cb(lv_event_t *e) {
 static void bm_restart_timer(lv_timer_t *t) {
     int key = (int)(intptr_t)t->user_data;
 
-    if (!bootmenu_restart_into(key)) bm_saved(false, NULL);
+    if (!bootmenu_restart_into(key)) {
+        bm_saved(false, NULL);
+        return;
+    }
+    radio_poweroff();      /* a restart from Linux never comes back on the X6100: off, and POWER starts the marked one */
 }
 
 static void bm_restart_cb(lv_event_t *e) {
@@ -3693,8 +3697,9 @@ static void bm_restart_cb(lv_event_t *e) {
     if (sel == 0 || sel > bm_keys_n) return;
     key = bm_keys[sel - 1];
     voice_sure();
-    voice_say_text_fmt("Restarting into F%i, %s. The default stays as it is", key, bm.name[key - 1]);
-    msg_update_text_fmt("Restarting into F%i %s", key, bm.name[key - 1]);
+    voice_say_text_fmt("F%i, %s, once. The radio switches off: press the power button to start it. "
+                       "The default stays as it is", key, bm.name[key - 1]);
+    msg_update_text_fmt("Next start: F%i %s. Switching off: press POWER", key, bm.name[key - 1]);
     lv_timer_set_repeat_count(lv_timer_create(bm_restart_timer, 5000, (void *)(intptr_t)key), 1);
 }
 

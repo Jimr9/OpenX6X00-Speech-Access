@@ -36,7 +36,9 @@ bool bootmenu_read(bootmenu_t *b);
 bool bootmenu_set_screen(int default_key, int secs);       /* bootmenu.env; -1 leaves a value as it is */
 bool bootmenu_set_talk(int default_key, int wait_s);       /* talkmenu.txt; -1 leaves a value as it is */
 
-/* The next start only: that key's system, then the default again. Restarts the radio */
+/* The next start only: that key's system, then the default again. Only marks the card: the X6100 cannot restart
+ * itself from Linux (TomekR1/Xiegu6x00-Multi-Boot#7), so the caller switches the radio off and the owner presses
+ * POWER */
 bool bootmenu_restart_into(int key);
 
 #ifdef __cplusplus

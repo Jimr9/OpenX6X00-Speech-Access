@@ -177,9 +177,6 @@ bool bootmenu_restart_into(int key) {
     ok = pwrite(fd, sec, sizeof(sec), ONCE_LBA * 512) == (ssize_t)sizeof(sec);
     fsync(fd);
     close(fd);
-    if (ok) {
-        sync();
-        return system("reboot") == 0;
-    }
-    return false;
+    if (ok) sync();
+    return ok;
 }
