@@ -755,11 +755,25 @@ static const char *button_text(button_data_t *d) {
     } else if (c) {
         snprintf(s, sizeof(s), "%.*s, %s", (int)(c - t), t, c + 2);
     } else {
-        snprintf(s, sizeof(s), "%s", t);
+        int  page, pages, len = 0;
+        char name[40];
+
+        /* a page key, "(BANDS\n1:1)": said "BANDS, page 1 of 1" */
+        if (sscanf(t, "(%39[^\n]\n%d:%d)%n", name, &page, &pages, &len) == 3 && len && !t[len])
+            snprintf(s, sizeof(s), "%s, page %d of %d", name, page, pages);
+        else
+            snprintf(s, sizeof(s), "%s", t);
     }
-    for (char *p = s; *p; p++) {
-        if (*p == '\n') *p = ' ';
+    /* a word split for the screen, "Propa-\ngation", is said whole; other line breaks are spaces */
+    char *w = s;
+    for (const char *p = s; *p; p++) {
+        if (p[0] == '-' && p[1] == '\n') {
+            p++;
+            continue;
+        }
+        *w++ = *p == '\n' ? ' ' : *p;
     }
+    *w = '\0';
     return s;
 }
 
@@ -772,9 +786,12 @@ void buttons_page_text(char *out, size_t size) {
         button_data_t *d = cur_page->items[i];
 
         if (!d) continue;
+        const char *raw = d->type == BTN_TEXT_FN ? d->label_fn() : d->type == BTN_TEXT ? d->label : NULL;
+
+        if (raw && raw[0] == '(') continue;      /* the page's own name button */
         const char *t = button_text(d);
 
-        if (!t || !t[0] || t[0] == '(') continue;      /* the page's own name button */
+        if (!t || !t[0]) continue;
         n += snprintf(out + n, size - n, "%sF%d %s", n ? ", " : "", i + 1, t);
     }
 }

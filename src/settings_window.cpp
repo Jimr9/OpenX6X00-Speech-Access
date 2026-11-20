@@ -5368,8 +5368,14 @@ static lv_obj_t   *bc_note;
 static lv_timer_t *bc_timer;
 static bool        bc_busy;
 
-static void bc_say(const char *s) {
+/* on the screen only: the row's standing note and the download's progress */
+static void bc_show(const char *s) {
     if (bc_note) lv_label_set_text(bc_note, s);
+}
+
+/* on the screen and spoken: what a press of Update brought */
+static void bc_say(const char *s) {
+    bc_show(s);
     voice_say_text_fmt("%s", s);
 }
 
@@ -5388,7 +5394,7 @@ static void bc_timer_cb(lv_timer_t *t) {
     if (fscanf(f, "%ld %ld", &got, &total) == 2) {
         if (total > 0) snprintf(s, sizeof(s), "Downloading %.1f of %.1f MB", got / 1e6, total / 1e6);
         else snprintf(s, sizeof(s), "Downloading %.1f MB", got / 1e6);
-        bc_say(s);
+        bc_show(s);
     }
     fclose(f);
 }
@@ -5612,7 +5618,7 @@ static uint8_t make_broadcast_list(uint8_t row) {
     lv_obj_add_event_cb(bc_note, bc_note_del_cb, LV_EVENT_DELETE, NULL);
 
     if (bc_busy) {
-        bc_say("Downloading...");
+        bc_show("Downloading...");
         bc_timer = lv_timer_create(bc_timer_cb, 500, NULL);
         return row + 1;
     }
@@ -5627,7 +5633,7 @@ static uint8_t make_broadcast_list(uint8_t row) {
         strcpy(s, "In use: the list that came with the firmware.");
     }
     if (f) fclose(f);
-    bc_say(s);
+    bc_show(s);
     return row + 1;
 }
 
