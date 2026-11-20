@@ -4245,6 +4245,7 @@ static void sm_rfg_cb(lv_event_t *e) {
 
 static void smc_note_set(const char *text) {
     if (smc_note) lv_label_set_text(smc_note, text);
+    voice_say_text_fmt("%s", text);
 }
 
 static void smc_btn_label(const char *text) {
@@ -4975,6 +4976,9 @@ static const char *ts_funnel_update(const ts_status_t *st, bool running) {
     return enable ? st->funnel_url : NULL;
 }
 
+static uint32_t ts_tell_until;   /* lv_tick: new statuses spoken until then (a command was given) */
+static char     ts_told[64];
+
 static void ts_update() {
     ts_status_t st;
 
@@ -4993,6 +4997,10 @@ static void ts_update() {
         else lv_obj_clear_state(ts.sw, LV_STATE_CHECKED);
     }
     lv_label_set_text(ts.text, st.text);
+    if (ts_tell_until && (int32_t)(ts_tell_until - lv_tick_get()) > 0 && strcmp(ts_told, st.text)) {
+        snprintf(ts_told, sizeof(ts_told), "%s", st.text);
+        voice_say_text_fmt("Tailscale: %s", st.text);
+    }
     if (running) {
         lv_label_set_text_fmt(ts.addr, "%s  %s", st.name, st.ip);
     } else {
@@ -5033,6 +5041,8 @@ static void ts_update() {
 }
 
 static void ts_done_cb(const char *out, int status, void *user) {
+    ts_tell_until = lv_tick_get() + 60000;
+    ts_told[0] = 0;
     if ((intptr_t)user == wl_gen) {
         ts_busy(false);
     }
@@ -5077,6 +5087,7 @@ static void ts_logout_cb(lv_event_t *e) {
     if (!ts.armed || lv_tick_elaps(ts.armed) > TS_ARM_MS) {
         ts.armed = lv_tick_get() | 1;
         lv_label_set_text(ts.logout_note, "press again to log out");
+        voice_say_text_fmt("Press again to log out");
         return;
     }
     ts.armed = 0;
@@ -5359,6 +5370,7 @@ static bool        bc_busy;
 
 static void bc_say(const char *s) {
     if (bc_note) lv_label_set_text(bc_note, s);
+    voice_say_text_fmt("%s", s);
 }
 
 /* 9593 as "9,593" */
@@ -5430,8 +5442,15 @@ static lv_timer_t *upd_timer;
 static bool        upd_busy;
 static char        upd_latest[24];     /* a newer version found by Check, "" none */
 
-static void upd_say(const char *t) {
+/* on the screen only: the row's standing note, read with the row */
+static void upd_show(const char *t) {
     if (upd_note) lv_label_set_text(upd_note, t);
+}
+
+/* on the screen and spoken: what a press of Check or Install brought */
+static void upd_say(const char *t) {
+    upd_show(t);
+    voice_say_text_fmt("%s", t);
 }
 
 static void upd_btn_label(const char *t) {
@@ -5442,6 +5461,8 @@ static void upd_timer_cb(lv_timer_t *t) {
     FILE *f = fopen(UPD_PROGRESS, "r");
     char  step[16], s[64];
     long  got = 0, total = 0;
+    static char last_step[16];   /* spoken: each new step, and the download every quarter */
+    static int  last_quarter;
 
     if (!f) return;
     if (fscanf(f, "%15s %ld %ld", step, &got, &total) >= 1) {
@@ -5455,7 +5476,16 @@ static void upd_timer_cb(lv_timer_t *t) {
         } else {
             snprintf(s, sizeof(s), "Finishing...");
         }
-        upd_say(s);
+        upd_show(s);
+        int quarter = (!strcmp(step, "download") && total > 0) ? (int)(got * 4 / total) : 0;
+        if (strcmp(step, last_step)) {
+            snprintf(last_step, sizeof(last_step), "%s", step);
+            last_quarter = 0;
+            if (strcmp(step, "download")) voice_say_text_fmt("%s", s);
+        } else if (quarter > last_quarter && quarter < 4) {
+            last_quarter = quarter;
+            voice_say_text_fmt("Downloaded %d percent", quarter * 25);
+        }
     }
     fclose(f);
 }
@@ -5500,13 +5530,13 @@ static void upd_check_done(const char *out, int status, void *user) {
         snprintf(upd_latest, sizeof(upd_latest), "%s", latest);
         if (strstr(out, "\"image_needed\": true") && upd_json_str(out, "image_note", note, sizeof(note))) {
             /* the release also wants a newer card image for this radio (x6100-update reads its image-required) */
-            snprintf(s, sizeof(s), "v%s is out; its card image brings %s", latest, note[0] ? note : "more");
+            snprintf(s, sizeof(s), "Version %s is out; its card image brings %s", latest, note[0] ? note : "more");
         } else {
-            snprintf(s, sizeof(s), "v%s is available. Install downloads it and restarts the radio software.", latest);
+            snprintf(s, sizeof(s), "Version %s is available. Press Install to download it; the radio software restarts at the end.", latest);
         }
         upd_btn_label("Install");
     } else if (upd_json_str(out, "latest", latest, sizeof(latest))) {
-        snprintf(s, sizeof(s), "Up to date: v%s is the latest release.", latest);
+        snprintf(s, sizeof(s), "Up to date: version %s is the latest release.", latest);
     } else {
         snprintf(s, sizeof(s), "No release on GitHub yet.");
     }
@@ -5553,17 +5583,17 @@ static uint8_t make_update(uint8_t row) {
     lv_obj_add_event_cb(upd_note, upd_del_cb, LV_EVENT_DELETE, NULL);
     if (f) {   /* installed, not yet confirmed by a minute of running */
         fclose(f);
-        upd_say("A new version was just installed: it is confirmed once the radio has run a minute.");
+        upd_show("A new version was just installed: it is confirmed once the radio has run a minute.");
     } else if (upd_busy) {
-        upd_say("Updating...");
+        upd_show("Updating...");
         if (!upd_timer) upd_timer = lv_timer_create(upd_timer_cb, 500, NULL);
     } else if (image_newer_wanted(note, sizeof(note))) {
         /* the running version wants a newer card image than the one on the card */
         snprintf(t, sizeof(t), "New card image for this version: %s", note);
-        upd_say(t);
+        upd_show(t);
     } else {
         snprintf(s, sizeof(s), "Check looks for a newer release on GitHub; installing takes a minute.");
-        upd_say(s);
+        upd_show(s);
     }
     return row + 1;
 }
