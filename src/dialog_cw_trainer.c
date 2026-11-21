@@ -198,6 +198,7 @@ static void destruct_cb(void);
 static void key_cb(lv_event_t *e);
 static void refresh_ui(void);
 static void refresh_btn(button_data_t *b);
+static void spaced(const char *in, char *out, size_t size);
 
 static void play_cb(button_data_t *b);
 static void skip_cb(button_data_t *b);
@@ -838,13 +839,26 @@ static bool answering(void) {
 
 /* A character of the answer, typed or picked on screen; the answer ends at the group's length (tick_cb) */
 static void copy_type(char c) {
+    bool added;
+
     in_use();
-    if (cwt_copy_add(heard, (int)strlen(target), c)) heard_n++;
+    added = cwt_copy_add(heard, (int)strlen(target), c);
+    if (added) heard_n++;
+    /* speech: the character echoed once the group is played, not over its sidetone */
+    if (added && st == ST_LISTEN && voice_auto_active()) {
+        char one[2] = {c, 0}, sp[16];
+
+        spaced(one, sp, sizeof(sp));
+        voice_say_text_fmt("%s", sp);
+    }
     refresh_ui();
 }
 
 static void copy_rub_out(void) {
-    if (cwt_copy_del(heard)) heard_n--;
+    if (cwt_copy_del(heard)) {
+        heard_n--;
+        if (voice_auto_active()) voice_say_text_fmt("deleted");
+    }
     refresh_ui();
 }
 
@@ -1351,6 +1365,39 @@ static void refresh_copy(void) {
         lv_obj_set_style_border_color(key_o[i], lit ? TC(focus) : TC(panel_border), 0);
         /* the level's newest character as in Learn's list */
         lv_obj_set_style_text_color(key_l[i], lit ? TC(focus_text) : (i == l - 1 ? TC(accent) : TC(text)), 0);
+    }
+
+    /* Speech: the key on screen the MFK turns to, and the result with what was sent and typed */
+    {
+        static int said_tried = -1, said_key = -1;
+
+        if (!answering()) {
+            said_key = -1;
+        } else if (said_key < 0) {
+            said_key = key_sel;             /* the answer begins: said when the MFK moves */
+        } else if (key_sel != said_key) {
+            said_key = key_sel;
+            if (voice_auto_active()) {
+                char one[2] = {key_sel < l ? koch[key_sel].c : 0, 0}, sp[16];
+
+                spaced(one, sp, sizeof(sp));
+                voice_say_text_fmt("%s", key_sel < l ? sp : key_sel == l ? "Delete" : "OK, done");
+            }
+        }
+        if (st == ST_RESULT && !play_due && s->tried != said_tried) {
+            said_tried = s->tried;
+            if (voice_auto_active()) {
+                char sp1[64], sp2[64];
+
+                spaced(target, sp1, sizeof(sp1));
+                spaced(heard, sp2, sizeof(sp2));
+                if (last_ok)
+                    voice_say_text_fmt("Right, %s. Score %i of %i", sp1, s->right, s->tried);
+                else
+                    voice_say_text_fmt("Wrong, sent %s, typed %s. Score %i of %i", sp1, sp2[0] ? sp2 : "nothing",
+                                       s->right, s->tried);
+            }
+        }
     }
 }
 

@@ -553,6 +553,11 @@ static void btk_echo_show(void) {
     }
 }
 
+/* Speech: the keyboard step built again because Bluetooth's state changed (btk_tick) says only what changed, not the
+ * whole step again: its state line, the code to type digit by digit, how many keyboards were found */
+static bool btk_quiet;
+static char btk_said[240];
+
 static void build_keyboard(void) {
     char        line[128];
     const char *say   = line;
@@ -627,6 +632,17 @@ static void build_keyboard(void) {
             break;
     }
     status = para(&sony_24, color, say);
+    {
+        size_t n = (size_t)snprintf(btk_said, sizeof(btk_said), "%s", say);
+
+        if (btk_out.state == FSK_PASSKEY) {
+            for (const char *c = btk_out.code; *c && n + 3 < sizeof(btk_said); c++)
+                n += (size_t)snprintf(btk_said + n, sizeof(btk_said) - n, " %c", *c);
+        } else if (list && btk_out.n_shown) {
+            snprintf(btk_said + n, sizeof(btk_said) - n, ". %i keyboard%s found", btk_out.n_shown,
+                     btk_out.n_shown == 1 ? "" : "s");
+        }
+    }
 
     if (btk_out.state == FSK_PASSKEY) {
         lv_obj_t *l = text(body, &sony_60, TC(accent), btk_out.code);
@@ -670,7 +686,9 @@ static void btk_tick(void) {
                 focus_back = i;
             }
         }
+        btk_quiet = true;
         build();
+        btk_quiet = false;
     }
 }
 
@@ -1215,8 +1233,14 @@ static void build(void) {
         }
         step_said_add(keys);
     }
-    voice_focus_hint(step_said);
-    lv_group_focus_obj(items_n ? items[focus_back < items_n ? focus_back : 0] : dialog.obj);
+    if (btk_quiet && step == STEP_KEYBOARD) {
+        /* only the change said, then the control the MFK is on (the list may be new), not the whole step again */
+        voice_focus_hint(btk_said);
+        lv_group_focus_obj(items_n ? items[focus_back < items_n ? focus_back : 0] : dialog.obj);
+    } else {
+        voice_focus_hint(step_said);
+        lv_group_focus_obj(items_n ? items[focus_back < items_n ? focus_back : 0] : dialog.obj);
+    }
     focus_back = 0;
     for (int i = 0; i < BUTTONS; i++) {
         buttons_refresh(page.items[i]);

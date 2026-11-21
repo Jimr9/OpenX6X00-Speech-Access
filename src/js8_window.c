@@ -3090,14 +3090,38 @@ static void board_update(void)
 }
 
 /* The MFK on the board: the next card, its station selected as a row of the list would be */
+/* Speech: a card as said, "K 1 A B C, 2 new messages, minus 12 dB, United States, 1200 km, 3 of 9" */
+static void card_say(int k)
+{
+    const js8_station_t *st = &board_st[k];
+    const where_t       *w  = station_where(st->call);
+    int                  n  = unread_of(st->call);
+    const char          *role = last_role(st->call);
+    char                 call[48], tag[48] = "", where[80] = "";
+
+    if (!voice_auto_active()) return;
+    voice_spell_calls(st->call, call, sizeof(call));
+    if (n) snprintf(tag, sizeof(tag), ", %d new message%s", n, n == 1 ? "" : "s");
+    else if (st->heard_me && st->has_reported_snr) snprintf(tag, sizeof(tag), ", heard you, %+d", st->reported_snr);
+    else if (st->heard_me) snprintf(tag, sizeof(tag), ", heard you");
+    else if (role[0]) snprintf(tag, sizeof(tag), ", %s", !strcmp(role, "CQ") ? "C Q" : !strcmp(role, "HB") ? "heartbeat" : role);
+    if (w && w->country[0] && w->km >= 0) snprintf(where, sizeof(where), ", %s, %s%d km", w->country, w->approx ? "about " : "", w->km);
+    else if (w && w->country[0]) snprintf(where, sizeof(where), ", %s", w->country);
+    voice_delay_say_text_fmt("%s%s, %d d B%s, %d of %d", call, tag, st->snr, where, k + 1, board_n);
+}
+
 static void board_move(int step)
 {
-    if (!board_n) return;
+    if (!board_n) {
+        if (voice_auto_active()) voice_say_text_fmt("No stations yet");
+        return;
+    }
     int k = board_sel >= 0 ? (board_sel + step + board_n) % board_n : 0;
     snprintf(board_sel_call, sizeof(board_sel_call), "%s", board_st[k].call);
     memcpy(sel_call, board_st[k].call, sizeof(sel_call));
     selection_move(board_st[k].freq_hz, board_st[k].snr);
     board_update();
+    card_say(board_sel >= 0 ? board_sel : k);   /* board_update() sorted the cards again: the one by its call */
 }
 
 static void conv_open(void);
