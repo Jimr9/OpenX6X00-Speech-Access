@@ -1449,6 +1449,7 @@ static void refresh_ui(void) {
             break;
         case ST_RESULT: {
             static int said_tried = -1;
+            int        tried      = ses()->tried;     /* one more with each group keyed back (cw_trainer_score.c) */
 
             if (tried != said_tried && voice_auto_active()) {
                 char sp1[64], sp2[64];
