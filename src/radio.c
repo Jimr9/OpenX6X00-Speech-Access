@@ -1251,8 +1251,9 @@ void radio_set_tx_prepare_fn(void (*fn)(void)) {
 }
 
 /* Before the GUI keys, on the thread that keys and with no lock held: the speaker's own audio stops, so none of it
- * goes out with the TX audio (the PTT, and the modem that sends the codec's audio): the Internet radio's station
- * (audio.h), then the voice link's network (voice_net.c: Zello's channel, SVXConnect's talkgroup) */
+ * goes out with the TX audio (the PTT, and the modem that sends the codec's audio): the listeners, the Internet
+ * radio's station and DMR's talkgroups (audio.h), then the voice link's network (voice_net.c: Zello's channel,
+ * SVXConnect's talkgroup) */
 static void tx_prepare(void) {
     void (*fn)(void) = atomic_load(&tx_prepare_fn);
 
@@ -2508,10 +2509,13 @@ static void battery_log(const hw_pack_t *p, bool volts_ext) {
         }
         fclose(f);
     }
+    /* the % shown on battery (bat_watch_cap: the base's can be far off, #49), else the base's: the time to full is
+     * learned in the base's % while charging (bat_est.c), as the log keeps it. One row gone wrong held (bat_row_cap) */
+    static bat_row_t row = {0, -1, false};
+    int              cap = bat_row_cap(&row, p->vbat, bat_pct >= 0 ? bat_pct : p->batcap,
+                                       p->vext * 0.1f >= 3.0f || p->charging || tx_s > 0);
     bat_sample_t s = {
-        /* the % shown on battery (bat_watch_cap: the base's can be far off, #49), else the base's: the time to
-         * full is learned in the base's % while charging (bat_est.c), as the log keeps it */
-        .t = t, .vbat = p->vbat * 0.1f, .cap = bat_pct >= 0 ? bat_pct : p->batcap, .vext = p->vext * 0.1f,
+        .t = t, .vbat = p->vbat * 0.1f, .cap = cap, .vext = p->vext * 0.1f,
         .charging = p->charging,
         .tx_s = tx_s, .tx_w = tx_s > 0 ? tx_ws / tx_s : 0, .bl = backlight_level(),
         .wifi = wifi_get_status() != WIFI_OFF,

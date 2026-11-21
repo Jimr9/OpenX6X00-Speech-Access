@@ -47,6 +47,7 @@ extern "C" {
     #include "gui_events.h"
     #include "key_input.h"
     #include "paddle_keyer.h"
+    #include "cfg/kbd_devices.h"
     #include "clock.h"
     #include "bat_est.h"
     #include "audio.h"
@@ -57,11 +58,13 @@ extern "C" {
     #include "station.h"
     #include "band_plan.h"
     #include "countries.h"
+    #include "meteo.h"
     #include "tci_server.h"
     #include "remote_server.h"
     #include "cluster/client.h"
     #include "cluster/spots.h"
     #include "broadcast_db.h"
+    #include "boot_cw.h"
 
     #include "lvgl/lvgl.h"
     #include <sys/time.h>
@@ -872,6 +875,7 @@ static const key_action_t front_actions[] = {
     {" APP Cluster ", ACTION_APP_CLUSTER},
     {" APP CW Trainer ", ACTION_APP_CWTRAINER},
     {" APP CW Keyboard ", ACTION_APP_CW_KBD},
+    {" APP Mail ", ACTION_APP_MAIL},
     {" APP Field Ops ", ACTION_APP_FIELD},
     {" APP Bands ", ACTION_APP_BANDS},
     {" APP Propagation ", ACTION_APP_PROPAGATION},
@@ -880,6 +884,7 @@ static const key_action_t front_actions[] = {
     {" APP Internet radio ", ACTION_APP_IRADIO},
     {" APP Zello ", ACTION_APP_ZELLO},
     {" APP SVXConnect ", ACTION_APP_SVX},
+    {" APP DMR ", ACTION_APP_DMR},
     {" APP Flights ", ACTION_APP_FLIGHTS},
     {" APP HF Air Band ", ACTION_APP_AERO},
     {" APP CB ", ACTION_APP_CB},
@@ -3203,12 +3208,45 @@ static void grid_create() {
     lv_obj_align(page, LV_ALIGN_RIGHT_MID, -4, 0);   /* right of the rail */
 }
 
-/* Station: callsign and QTH locator, edited with the on-screen keyboard */
+/* Station: callsign, QTH locator and the weather's place, edited with the on-screen keyboard */
 
 #define ST_CALLSIGN 1
 #define ST_QTH      2
+#define ST_PLACE    3
 
-static int st_kbd;  /* keyboard open for ST_CALLSIGN / ST_QTH */
+static int st_kbd;  /* keyboard open for ST_CALLSIGN / ST_QTH / ST_PLACE */
+
+/* The place typed for the weather: degrees or a locator (meteo_place_parse()), or nothing. A place typed is the one
+ * the weather is for (Weather from: Typed); none typed, where the radio is again */
+static void weather_place_edit(lv_obj_t *text) {
+    char place[METEO_PLACE_MAX];
+
+    /* the digits and signs of degrees, N S E W, the letters of a locator (A to X) */
+    lv_textarea_set_accepted_chars(text, "0123456789.,;+- ABCDEFGHIJKLMNOPQRSTUVWXabcdefghijklmnopqrstuvwx");
+    lv_textarea_set_max_length(text, METEO_PLACE_MAX - 1);
+    lv_textarea_set_placeholder_text(text, "50.85, 4.35 or JO20ft");
+    param_t_get(cfg_meteo_place, place, sizeof(place));
+    textarea_window_set(place);
+}
+
+static bool weather_place_save(const char *val) {
+    char   v[METEO_PLACE_MAX];
+    double lat, lon;
+    size_t n;
+
+    snprintf(v, sizeof(v), "%s", val + strspn(val, " "));
+    for (n = strlen(v); n && v[n - 1] == ' '; n--) v[n - 1] = 0;
+    if (v[0] && !meteo_place_parse(v, &lat, &lon)) {
+        msg_update_text_fmt("Not a place: degrees (50.85, 4.35) or a locator (JO20ft)");
+        return false;
+    }
+    cfg_sm.p_meteo_place.set(v);
+    if (v[0])
+        cfg_sm.p_meteo_from.set(METEO_FROM_TYPED);
+    else if (cfg_sm.p_meteo_from.get() == METEO_FROM_TYPED)
+        cfg_sm.p_meteo_from.set(METEO_FROM_RADIO);
+    return true;
+}
 
 /* The keyboard gets all the keys: the page is built again when it closes */
 static bool st_kbd_close() {
@@ -3220,7 +3258,9 @@ static bool st_kbd_close() {
 
 static bool st_kbd_ok() {
     const char *val = textarea_window_get();
-    bool        ok  = st_kbd == ST_CALLSIGN ? station_callsign_save(val) : station_qth_save(val);
+    bool        ok  = st_kbd == ST_CALLSIGN ? station_callsign_save(val)
+                    : st_kbd == ST_PLACE    ? weather_place_save(val)
+                                            : station_qth_save(val);
 
     return ok && st_kbd_close();
 }
@@ -3231,6 +3271,8 @@ static void st_kbd_open_cb(lv_event_t *e) {
     textarea_window_open(st_kbd_ok, st_kbd_close);
     if (st_kbd == ST_CALLSIGN) {
         station_callsign_edit(textarea_window_text());
+    } else if (st_kbd == ST_PLACE) {
+        weather_place_edit(textarea_window_text());
     } else {
         station_qth_edit(textarea_window_text());
     }
@@ -3316,6 +3358,26 @@ static uint8_t make_country(uint8_t row) {
     return row + 1;
 }
 
+/* Where APP > Weather, its notices and the web Weather page ask the weather for (meteo.h): where the radio is (its GPS,
+ * the phone's, the QTH locator), the QTH locator whatever the GPS says, or the place typed on the row below. Four cells
+ * wide, out to the left as the band plan's */
+static uint8_t make_weather(uint8_t row) {
+    char place[METEO_PLACE_MAX];
+
+    wl_row_label(row, "Weather from");
+    row_choice(row++, 1, 1, SMALL_4, " Auto \n Locator \n Typed ", cfg_sm.p_meteo_from.get(), int_choice_cb,
+               &cfg_sm.p_meteo_from);
+    param_t_get(cfg_meteo_place, place, sizeof(place));
+    wl_row_label(row, "Weather place");
+
+    /* degrees take the band plan's width, out to the left of the column */
+    lv_obj_t *obj = wl_button(row, place[0] ? place : "-", st_kbd_open_cb);
+    lv_obj_set_size(obj, SMALL_4, ROW_H - 4);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_END, 1, 1, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_user_data(obj, (void *)(intptr_t)ST_PLACE);
+    return row + 1;
+}
+
 /* The first-start guide again (first_start.c): Settings gives way to it once this press is over, its window going with
  * the press's own object */
 static void guide_open(void *arg) {
@@ -3337,6 +3399,7 @@ static uint8_t make_station(uint8_t row) {
     row = make_station_row(row, "QTH locator", params.qth.x, ST_QTH);
     row = make_country(row);
     row = make_band_region(row);
+    row = make_weather(row);
     /* The switches in the card's own second column: make_param_switch places them in the
      * seven-column template, past the end of this two-column one */
     /* A and B each on their own band: the VFO key brings the other one's band back */
@@ -3988,6 +4051,41 @@ static uint8_t make_paddle(uint8_t row) {
     return row;
 }
 
+/* Settings > Keys > KEYBOARD, a row for each USB or Bluetooth device with a keyboard's keys connected as the page
+ * opens: what its [ ] are (kbd_devices.h, #306), the paddle in CW as on every keyboard, or the RX volume in every
+ * window and mode (a volume knob, a macro pad), never keying */
+#define KD_ROWS 6
+
+static keyboard_dev_t kd_dev[KD_ROWS];
+
+static void kd_choice_cb(lv_event_t *e) {
+    keyboard_dev_t *d = (keyboard_dev_t *)lv_event_get_user_data(e);
+    std::string     list = cfg_sm.p_kbd_dev_volume.get();
+    char            out[KBD_DEV_LIST_LEN];
+
+    kbd_dev_list_set(list.c_str(), d->id, lv_dropdown_get_selected(lv_event_get_target(e)) == 1, out, sizeof(out));
+    cfg_sm.p_kbd_dev_volume.set(out);
+}
+
+static uint8_t make_kbd_devices(uint8_t row) {
+    size_t      n    = keyboard_devices(kd_dev, KD_ROWS);
+    std::string list = cfg_sm.p_kbd_dev_volume.get();
+
+    for (size_t i = 0; i < n; i++) {
+        char label[48];
+
+        snprintf(label, sizeof(label), "%.16s%s", kd_dev[i].name, strlen(kd_dev[i].name) > 16 ? "..." : "");
+        wl_row_label(row, label);
+        row_choice(row, 1, 3, SMALL_3, " Paddle in CW \n Volume ", kbd_dev_listed(list.c_str(), kd_dev[i].id),
+                   kd_choice_cb, &kd_dev[i]);
+        lv_label_set_text(wl_note(row++), _("its [ ] keys"));
+    }
+    if (!n) {
+        lv_label_set_text(pd_value(row++, _("[ ] keys by device")), _("none connected"));
+    }
+    return row;
+}
+
 /* What the front keys (long press) and the hand mic keys do, the USB paddle */
 static void make_keys_page() {
     uint8_t row;
@@ -3997,7 +4095,10 @@ static void make_keys_page() {
     row = make_key_rows(row, 0, KEY_ROWS_FRONT);
     card_end(row);
 
+    /* UP/DOWN: the channels, or the VFO a step as the main knob (#300, mic_updown.h); screen_main.c reads it at each
+     * press */
     row = card_begin("HAND MIC KEYS");
+    row = make_param_choice(row, "Hand mic UP/DOWN", " Channels \n Tune ", cfg_sm.p_mic_updown);
     row = make_key_rows(row, KEY_ROWS_FRONT, sizeof(key_rows) / sizeof(key_rows[0]));
     card_end(row);
 
@@ -4008,6 +4109,7 @@ static void make_keys_page() {
     /* The USB or Bluetooth keyboard's layout (#236): key_input.c follows it at once */
     row = card_begin("KEYBOARD");
     row = make_param_choice(row, "Layout", kbd_layout_options(), cfg_sm.p_kbd_layout);
+    row = make_kbd_devices(row);
     card_end(row);
 }
 
@@ -4641,6 +4743,8 @@ static void make_display_page() {
     grid_create();
     row = card_begin("BACKLIGHT");
     row = make_backlight(row);
+    /* For panels with stripes in the darkest shades: the display engine's gamma table sends 8..31 out as 32 (#239) */
+    row = make_param_switch(row, "Panel stripes fix", cfg_sm.p_panel_stripes);
     card_end(row);
 
     row = card_begin("SPECTRUM");
@@ -4691,6 +4795,8 @@ static void make_display_page() {
     /* The box at the top right: the charge and the time left or to full, the voltages, the two in turn, or
      * the charge and the supply's voltage */
     row = make_param_choice(row, "Power display", " % + time \n Volts \n Alternate \n % + V ", cfg_sm.p_power_display);
+    /* The callsign of General > STATION small on the main screen (main_call.h) and on the boot logo (#292) */
+    row = make_param_switch(row, "Callsign", cfg_sm.p_callsign_show);
     card_end(row);
 
     row = card_begin("INTERFACE");
@@ -4702,6 +4808,8 @@ static void make_display_page() {
     row = make_param_choice(row, "Hide buttons", " Off \n After 3 s \n After 5 s \n After 10 s ",
                             cfg_sm.p_buttons_hide);
     row = make_param_switch(row, "Keep knob lines", cfg_sm.p_knob_lines_stay);   /* not hidden with the buttons */
+    /* A short press of VOL or the MFK: the next control on its list, as the stock firmware does (#282) */
+    row = make_param_switch(row, "Knob press: next control", cfg_sm.p_knob_press_next);
     row = make_theme(row);
     row = make_font(row);
     row = make_language(row);
@@ -4715,6 +4823,110 @@ static void make_display_page() {
     card_end(row);
 }
 
+/* Boot sound (#289): Off, CQ CQ (the switch's on up to v0.3.12), the callsign or an own text, in CW with the boot
+ * logo (bootanim/bootanim.c, boot_cw.h). The own text's row only with Own text: the page again after the event, as
+ * for the spectrum. The note says what it plays and how fast */
+static lv_obj_t *boot_sound_dd;
+static bool      boot_kbd;      /* the own text's keyboard open */
+
+static void boot_note(lv_obj_t *note) {
+    int         choice = cfg_sm.p_boot_sound.get();
+    std::string own    = cfg_sm.p_boot_text.get();
+    const char *text   = boot_cw_text(choice, params.callsign.x, own.c_str());
+    boot_cw_t   cw;
+
+    if (!text || !boot_cw_plan(text, &cw)) {
+        lv_label_set_text(note, "");
+    } else if (choice == BOOT_SOUND_CALL && !strcmp(text, BOOT_CW_CQ)) {
+        lv_label_set_text(note, "No callsign set: CQ CQ");
+    } else if (choice == BOOT_SOUND_TEXT && !strcmp(text, BOOT_CW_CQ)) {
+        lv_label_set_text(note, "No text yet: CQ CQ");
+    } else if (cw.used < strlen(text) && choice == BOOT_SOUND_CALL) {
+        lv_label_set_text_fmt(note, "Only %.*s, %d WPM", (int)cw.used, text, 1200 / cw.dit_ms);
+    } else if (cw.used < strlen(text)) {     /* the text is on the row under it: its part as a number, on two lines */
+        lv_label_set_text_fmt(note, "First %d characters, %d WPM", (int)cw.used, 1200 / cw.dit_ms);
+    } else if (choice == BOOT_SOUND_CALL) {
+        lv_label_set_text_fmt(note, "%s, %d WPM", text, 1200 / cw.dit_ms);
+    } else {
+        lv_label_set_text_fmt(note, "%d WPM", 1200 / cw.dit_ms);
+    }
+}
+
+static void boot_sound_page(void *arg) {
+    if (!page) {
+        return;
+    }
+    make_audio_page();
+    lv_group_focus_obj(boot_sound_dd);
+}
+
+static void boot_sound_cb(lv_event_t *e) {
+    lv_async_call(boot_sound_page, NULL);
+}
+
+static bool boot_kbd_close() {
+    boot_kbd = false;
+    textarea_window_close();
+    make_audio_page();
+    return true;
+}
+
+static bool boot_kbd_ok() {
+    char      text[BOOT_CW_TEXT_MAX + 1];
+    boot_cw_t cw;
+
+    boot_cw_clean(textarea_window_get(), text);
+    cfg_sm.p_boot_text.set(text);
+    if (boot_cw_plan(text, &cw) && cw.used < strlen(text)) {
+        msg_update_text_fmt("Boot sound: only \"%.*s\" fits", (int)cw.used, text);
+    }
+    return boot_kbd_close();
+}
+
+static void boot_text_cb(lv_event_t *e) {
+    boot_kbd = true;
+    lv_group_remove_all_objs(keyboard_group);
+    textarea_window_open(boot_kbd_ok, boot_kbd_close);
+    lv_textarea_set_max_length(textarea_window_text(), BOOT_CW_TEXT_MAX);
+    lv_textarea_set_accepted_chars(textarea_window_text(), BOOT_CW_TEXT_CHARS "abcdefghijklmnopqrstuvwxyz");
+    lv_textarea_set_placeholder_text(textarea_window_text(), "Boot text");
+    textarea_window_set(cfg_sm.p_boot_text.get().c_str());
+}
+
+/* Settings closed with the keyboard open */
+static void boot_delete_cb(lv_event_t *e) {
+    if (boot_kbd) {
+        boot_kbd = false;
+        textarea_window_close();
+    }
+}
+
+static uint8_t make_boot_sound(uint8_t row) {
+    wl_row_label(row, "Boot sound");
+    boot_sound_dd = row_choice(row, 1, 3, SMALL_3, " Off \n CQ CQ \n Callsign \n Own text ", cfg_sm.p_boot_sound.get(),
+                               int_choice_cb, &cfg_sm.p_boot_sound);
+    lv_obj_add_event_cb(boot_sound_dd, boot_sound_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    boot_note(wl_note(row++));
+    if (cfg_sm.p_boot_sound.get() == BOOT_SOUND_TEXT) {
+        std::string own = cfg_sm.p_boot_text.get();
+        lv_obj_t   *btn;
+        lv_obj_t   *label;
+
+        wl_row_label(row, "Boot text");
+        /* Four cells: 16 characters were cut at both ends in three */
+        btn   = wl_button(row, "", boot_text_cb);
+        label = lv_obj_get_child(btn, 0);
+        lv_obj_set_size(btn, SMALL_4, ROW_H - 4);
+        lv_obj_set_grid_cell(btn, LV_GRID_ALIGN_END, 3, 4, LV_GRID_ALIGN_CENTER, row++, 1);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        lv_obj_set_size(label, SMALL_4 - 16, lv_font_get_line_height(lv_obj_get_style_text_font(label, 0)));
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        (lv_label_set_text)(label, own.empty() ? "-" : own.c_str());   /* the user's, not translated */
+    }
+    lv_obj_add_event_cb(grid, boot_delete_cb, LV_EVENT_DELETE, NULL);
+    return row;
+}
+
 static void make_audio_page() {
     uint32_t caps = radio_caps();
     uint8_t  row;
@@ -4724,7 +4936,7 @@ static void make_audio_page() {
     row = make_sp_mode(row);
     row = make_line_gain(row);
     row = make_audio_gain(row);
-    row = make_param_switch(row, "Boot sound", cfg_sm.p_boot_sound);   /* CQ CQ in CW with the boot logo */
+    row = make_boot_sound(row);
     row = make_param_switch(row, "Speaker always off", cfg_sm.p_speaker_off);   /* a remote station */
     card_end(row);
 
@@ -5533,7 +5745,7 @@ static bool upd_json_str(const char *json, const char *key, char *out, size_t n)
 }
 
 static void upd_check_done(const char *out, int status, void *user) {
-    char latest[24] = "", s[200];
+    char latest[24] = "", s[280];
 
     upd_busy = false;
     upd_latest[0] = 0;
@@ -5544,8 +5756,13 @@ static void upd_check_done(const char *out, int status, void *user) {
 
         snprintf(upd_latest, sizeof(upd_latest), "%s", latest);
         if (strstr(out, "\"image_needed\": true") && upd_json_str(out, "image_note", note, sizeof(note))) {
-            /* the release also wants a newer card image for this radio (x6100-update reads its image-required) */
-            snprintf(s, sizeof(s), "Version %s is out; its card image brings %s", latest, note[0] ? note : "more");
+            /* the release also wants a newer card image for this radio (x6100-update reads its image-required); on a
+               multiboot card through Xiegu Multi-Boot: written onto the card, it would erase the menu */
+            if (strstr(out, "\"multiboot\": true"))
+                snprintf(s, sizeof(s), _("v%s is out; for its card image rebuild the card with Multi-Boot: %s"), latest,
+                         note[0] ? note : _("more"));
+            else
+                snprintf(s, sizeof(s), _("v%s is out; its card image brings %s"), latest, note[0] ? note : _("more"));
         } else {
             snprintf(s, sizeof(s), "Version %s is available. Press Install to download it; the radio software restarts at the end.", latest);
         }
@@ -5587,7 +5804,7 @@ static void upd_btn_cb(lv_event_t *e) {
 
 static uint8_t make_update(uint8_t row) {
     FILE *f = fopen("/var/lib/x6100-update/pending.json", "r");
-    char  s[96], note[160], t[240];
+    char  s[96], note[160], t[320];
 
     wl_row_label(row, "Update");
     upd_btn = wl_button(row, "Check", upd_btn_cb);
@@ -5603,9 +5820,13 @@ static uint8_t make_update(uint8_t row) {
         upd_show("Updating...");
         if (!upd_timer) upd_timer = lv_timer_create(upd_timer_cb, 500, NULL);
     } else if (image_newer_wanted(note, sizeof(note))) {
-        /* the running version wants a newer card image than the one on the card */
-        snprintf(t, sizeof(t), "New card image for this version: %s", note);
-        upd_show(t);
+        /* the running version wants a newer card image than the one on the card; on a multiboot card through Xiegu
+           Multi-Boot, which keeps the menu and the other systems (S01multiboot) */
+        if (card_is_multiboot())
+            snprintf(t, sizeof(t), _("New card image for this version, rebuild the card with Multi-Boot: %s"), note);
+        else
+            snprintf(t, sizeof(t), _("New card image for this version: %s"), note);
+        upd_say(t);
     } else {
         snprintf(s, sizeof(s), "Check looks for a newer release on GitHub; installing takes a minute.");
         upd_show(s);

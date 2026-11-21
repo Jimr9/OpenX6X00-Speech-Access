@@ -41,6 +41,7 @@
 #include "screen_rec.h"
 #include "key_input.h"
 #include "mic_keys.h"
+#include "mic_updown.h"
 #include "app_window.h"
 #include "band_keep.h"
 #include "settings_window.h"
@@ -48,6 +49,7 @@
 #include "cw_messages.h"
 #include "cw_encoder.h"
 #include "dialog_cw_kbd.h"
+#include "winlink_mail.h"
 #include "voice_messages.h"
 #include "swrscan_window.h"
 #include "ft8_window.h"
@@ -81,6 +83,7 @@
 #include "wefax_window.h"
 #include "dialog_js8.h"
 #include "freq_strip.h"
+#include "main_call.h"
 #include "lcd_panel.h"
 #include "freq_scale.h"
 #include "spot_marks.h"
@@ -95,6 +98,8 @@
 #include "walkie.h"
 #include "cfg/memory.h"
 #include "knob_info.h"
+#include "knob_press.h"
+#include "front_keys.h"
 #include "radio_controls.h"
 #include "apps_menu.h"
 #include "dialog_birdie.h"
@@ -102,6 +107,7 @@
 #include "dialog_zello.h"
 #include "dialog_meteo.h"
 #include "dialog_svx.h"
+#include "dialog_dmr.h"
 #include "voice_net.h"
 #include "first_start.h"
 #include "control_owner.h"
@@ -610,10 +616,12 @@ static const char *app_name(press_action_t a) {
         case ACTION_APP_IRADIO:     return "Internet radio";
         case ACTION_APP_ZELLO:      return "Zello";
         case ACTION_APP_SVX:        return "SVXConnect";
+        case ACTION_APP_DMR:        return "DMR";
         case ACTION_APP_FLIGHTS:    return "Flights";
         case ACTION_APP_AERO:       return "HF Air Band";
         case ACTION_APP_CB:         return "CB";
         case ACTION_APP_METEO:      return "Weather";
+        case ACTION_APP_MAIL:       return "Mail";
         default:                   return NULL;    /* Modes menu: a menu, not an app */
     }
 }
@@ -721,10 +729,12 @@ void main_screen_start_app(press_action_t app_action) {
         {ACTION_APP_IRADIO, &dialog_iradio},
         {ACTION_APP_ZELLO, &dialog_zello},
         {ACTION_APP_SVX, &dialog_svx},
+        {ACTION_APP_DMR, &dialog_dmr},
         {ACTION_APP_FLIGHTS, &dialog_flights},
         {ACTION_APP_AERO, &dialog_aero},
         {ACTION_APP_CB, &dialog_cb},
         {ACTION_APP_METEO, &dialog_meteo},
+        {ACTION_APP_MAIL, &dialog_winlink_mail},
     };
 
     if (app_action == ACTION_APP_RTTY) {
@@ -796,7 +806,7 @@ void main_screen_action(press_action_t action) {
             if ((action >= ACTION_APP_RTTY && action <= ACTION_APP_CHANNELS) || action == ACTION_APP_PROPAGATION ||
                 action == ACTION_APP_SCAN || action == ACTION_APP_IRADIO || action == ACTION_APP_ZELLO ||
                 action == ACTION_APP_FLIGHTS || action == ACTION_APP_AERO || action == ACTION_APP_CB ||
-                action == ACTION_APP_METEO) {
+                action == ACTION_APP_METEO || action == ACTION_APP_MAIL) {
                 main_screen_start_app(action);
             }
             break;
@@ -1043,7 +1053,7 @@ static void on_buttons_hide_change(Subject *subj, void *user_data) {
     main_screen_buttons_wake();
 }
 
-/* Front keys. Most act on the release (a press) or on the long press, not both */
+/* Front keys. Most act on the release (a press) or on the long press, not both; BAND UP and DOWN on the press */
 static void front_key_cb(lv_event_t *e) {
     event_keypad_t *ev   = lv_event_get_param(e);
     bool            tap  = ev->state == KEYPAD_RELEASE;
@@ -1094,8 +1104,11 @@ static void front_key_cb(lv_event_t *e) {
             }
             break;
 
+        /* On the press, as the stock firmware does, and again and again while held (front_keys.c). On the release
+         * they came late, and a press held past the long press time did nothing (#233). An app that holds the
+         * band (band_lock) gets each step too */
         case KEYPAD_BAND_UP: case KEYPAD_BAND_DOWN:
-            if (tap) {
+            if (ev->state == KEYPAD_PRESS || ev->state == KEYPAD_REPEAT) {
                 band_step(ev->key == KEYPAD_BAND_UP);
             }
             break;
@@ -1187,19 +1200,28 @@ static void front_key_cb(lv_event_t *e) {
 }
 
 /* The H-22's VOL+ and VOL-: the RX volume a step a press, as in Xiegu's app, and on by itself while the key is held
- * (the X6200's goes to 100). Its message as the VOL knob's */
+ * (the X6200's goes to 100). Its message as the VOL knob's. A keyboard's volume keys step it the same way
+ * (main_screen_media_vol, key_input.c) */
 #define MIC_VOL_DELAY_MS    400     /* held this long, the steps repeat */
 #define MIC_VOL_REPEAT_MS   100
 
 static lv_timer_t *mic_vol_timer;
 static hkey_t      mic_vol_key;
 
-static void mic_vol_step(void) {
-    uint16_t vol = radio_change_vol(mic_vol_key == HKEY_VOL_UP ? +1 : -1);
+static void rx_vol_step(int16_t df) {
+    uint16_t vol = radio_change_vol(df);
 
     if (!knobs_visible() || vol_get_ctrl() != CTRL_VOL) {
         msg_update_text_fmt("Volume: %i", vol);
     }
+}
+
+static void mic_vol_step(void) {
+    rx_vol_step(mic_vol_key == HKEY_VOL_UP ? +1 : -1);
+}
+
+void main_screen_media_vol(int dir) {
+    rx_vol_step(dir > 0 ? +1 : -1);
 }
 
 static void mic_vol_stop(void) {
@@ -1220,13 +1242,21 @@ static void mic_vol_repeat_cb(lv_timer_t *t) {
     lv_timer_set_period(t, MIC_VOL_REPEAT_MS);
 }
 
+static void knob_turn(int16_t diff, uint16_t dt);     /* the main knob turned (below) */
+
 /* Hand mic keys */
 static void mic_key_cb(lv_event_t *e) {
     event_hkey_t   *ev   = lv_event_get_param(e);
     bool            tap  = ev->state == HKEY_RELEASE;
     bool            hold = ev->state == HKEY_LONG;
+    bool            updown = ev->key == HKEY_UP || ev->key == HKEY_DOWN;
+    bool            tune   = updown && param_i_get(cfg_mic_updown) == MIC_UPDOWN_TUNE;
 
-    main_screen_buttons_wake();     /* a key: the buttons back (Hide buttons) */
+    /* A key: the buttons back (Hide buttons). Not UP/DOWN on Tune, the main knob's detents, which leave them as the
+     * knob does; held, the band, they come back */
+    if (!tune || hold) {
+        main_screen_buttons_wake();
+    }
     switch (ev->key) {
         /* The band printed on the key; digits only in F-INP (dialog_freq.c). Long: memory 1-9 */
         case HKEY_0: case HKEY_1: case HKEY_2: case HKEY_3: case HKEY_4:
@@ -1277,21 +1307,24 @@ static void mic_key_cb(lv_event_t *e) {
             }
             break;
 
-        /* Hand mic UP/DOWN: the channel before/after the last one tuned, its name shown;
-         * long press: band up/down */
+        /* Hand mic UP/DOWN (Settings > Keys > HAND MIC KEYS > Hand mic UP/DOWN, mic_updown.h): on Channels the channel
+         * before/after the last one tuned, its name shown; on Tune a detent of the main knob, up/down, by the knob's
+         * own path: its step, LOCK, an app's hold, an app's own use of the knob (#300). Long press: band up/down */
         case HKEY_UP:
         case HKEY_DOWN: {
-            bool up = ev->key == HKEY_UP;
+            mic_ud_t ud = mic_updown(param_i_get(cfg_mic_updown), ev->key == HKEY_UP, tap, hold);
 
-            if (hold) {
-                band_step(up);
-            } else if (tap && dialog_channels_recall_relative(up ? -1 : +1)) {
+            if (ud.what == MIC_UD_BAND) {
+                band_step(ud.dir > 0);
+            } else if (ud.what == MIC_UD_TUNE) {
+                knob_turn(ud.dir, 0);
+            } else if (ud.what == MIC_UD_CHANNEL && dialog_channels_recall_relative(ud.dir)) {
                 char f[32];
 
                 channel_overlay_show(dialog_channels_last_recalled_name());
                 voice_freq_text(cparam_i_get(cfg_fg_freq), f, sizeof(f));
                 voice_say_text_fmt("Channel %s, %s", dialog_channels_last_recalled_name(), f);
-            } else if (tap) {
+            } else if (ud.what == MIC_UD_CHANNEL) {
                 voice_say_text_fmt("No channels");
             }
             break;
@@ -1378,9 +1411,9 @@ static void mic_key_cb(lv_event_t *e) {
             ab_key(tap, hold);
             break;
 
-        case HKEY_BAND_UP:  /* as the BAND keys; Xiegu's app knows them, no base was seen sending them */
+        case HKEY_BAND_UP:  /* as the BAND keys, on the press; Xiegu's app knows them, no base was seen sending them */
         case HKEY_BAND_DOWN:
-            if (tap) {
+            if (ev->state == HKEY_PRESS) {
                 band_step(ev->key == HKEY_BAND_UP);
             }
             break;
@@ -1492,24 +1525,118 @@ static void plan_mode(int32_t old, int32_t freq) {
     }
 }
 
+/* diff detents of the main knob, dt ms each (0: a key, one step a detent): the frequency, and the open app's own use
+ * of the knob (FT8's TX offset). The hand mic's UP/DOWN on Tune come here too */
+static void knob_turn(int16_t diff, uint16_t dt) {
+    freq_shift(diff, dt);
+    dialog_rotary(diff);
+}
+
 static void main_knob_cb(lv_event_t *e) {
     rotary_data_t *turn = lv_event_get_param(e);
 
-    freq_shift(turn->diff, turn->dt);
-    dialog_rotary(turn->diff);
+    knob_turn(turn->diff, turn->dt);
     free(turn);     /* rotary.c allocates one per event */
 }
 
-/* VOL press: turning changes the value, or chooses what VOL controls */
-void main_screen_vol_press(void) {
-    if (walkie_on()) return;    /* the volume, always */
-
+/* VOL's press with Knob press: next control off, its long one with it on: turning changes the value, or chooses
+ * what VOL controls */
+static void vol_toggle(void) {
     bool edit = vol->state != VOL_STATE_EDIT;
 
     vol->state = edit ? VOL_STATE_EDIT : VOL_STATE_SELECT;
     knobs_set_vol_state(edit);
     vol_update(0);
     vol_say_state();
+}
+
+/* The MFK's, as VOL's */
+static void mfk_toggle(void) {
+    bool edit = mfk_state != MFK_STATE_EDIT;
+
+    mfk_state = edit ? MFK_STATE_EDIT : MFK_STATE_SELECT;
+    knobs_set_mfk_state(edit);
+    mfk_update(0);
+    mfk_say_state();
+}
+
+/* Knob press: next control (#282), as the stock firmware does it: a short press takes the knob's next control
+ * (round the list) ready to change, the knob line and the button's mark on it at once; a long one does what a
+ * press does with it off. A press is told short or long by watching the knob until it is let go or held
+ * (knob_press.h): the encoder's own LONG_PRESSED is not sent for VOL, nor for a click (Field Ops) */
+static knob_press_watch_t vol_watch, mfk_watch;
+static lv_timer_t        *knob_press_timer;
+
+static void vol_next(void) {
+    if (vol->state != VOL_STATE_EDIT) {
+        vol->state = VOL_STATE_EDIT;
+        knobs_set_vol_state(true);
+    }
+    vol_change_ctrl(+1);
+}
+
+static void mfk_next(void) {
+    if (mfk_state != MFK_STATE_EDIT) {
+        mfk_state = MFK_STATE_EDIT;
+        knobs_set_mfk_state(true);
+    }
+    mfk_change_ctrl(+1);
+}
+
+/* Held on the cluster column: tune to the spot, the knob left as it was, as the long press does with it off (a
+ * press, then the long press tuned and pressed again) */
+static void mfk_held(void) {
+    if (mfk_ctrl == CTRL_CLUSTER) {
+        cluster_column_tune();
+    } else {
+        mfk_toggle();
+    }
+}
+
+static void knob_press_cb(lv_timer_t *t) {
+    uint32_t now = lv_tick_get();
+
+    switch (knob_press_look(&vol_watch, now, keypad_vol_down())) {
+        case KNOB_PRESS_SHORT:  vol_next(); break;
+        case KNOB_PRESS_HELD:   vol_toggle(); break;
+        default:                break;
+    }
+    switch (knob_press_look(&mfk_watch, now, mfk && mfk->pressed)) {
+        case KNOB_PRESS_SHORT:  mfk_next(); break;
+        case KNOB_PRESS_HELD:   mfk_held(); break;
+        default:                break;
+    }
+    if (!vol_watch.watching && !mfk_watch.watching) {
+        lv_timer_pause(t);
+    }
+}
+
+/* A press to watch, and the first look at once: one with no knob down behind it (a keyboard's key, a click that
+ * comes at the release) is short there and then */
+static void knob_press_watch(knob_press_watch_t *w) {
+    knob_press_begin(w, lv_tick_get());
+    if (knob_press_timer) {
+        lv_timer_resume(knob_press_timer);
+    } else {
+        knob_press_timer = lv_timer_create(knob_press_cb, 20, NULL);
+    }
+    knob_press_cb(knob_press_timer);
+}
+
+static bool knob_press_next(void) {
+    return param_i_get(cfg_knob_press_next);
+}
+
+/* VOL press: turning changes the value, or chooses what VOL controls; with Knob press: next control the next
+ * control, or that when held */
+void main_screen_vol_press(void) {
+    if (walkie_on()) return;    /* the volume, always */
+
+    if (knob_press_next()) {
+        knob_press_watch(&vol_watch);
+    } else {
+        vol_toggle();
+    }
 }
 
 /* MFK as on the main screen: dir -1 / +1 turns it, 0 is the press */
@@ -1521,13 +1648,11 @@ void main_screen_mfk(int dir) {
             mfk_change_ctrl(dir);
         return;
     }
-
-    bool edit = mfk_state != MFK_STATE_EDIT;
-
-    mfk_state = edit ? MFK_STATE_EDIT : MFK_STATE_SELECT;
-    knobs_set_mfk_state(edit);
-    mfk_update(0);
-    mfk_say_state();
+    if (knob_press_next()) {
+        knob_press_watch(&mfk_watch);
+    } else {
+        mfk_toggle();
+    }
 }
 
 /* Keys sent to the spectrum (it has the keyboard when no app does): the VOL knob, and a USB
@@ -1607,8 +1732,10 @@ static void spectrum_pressed_cb(lv_event_t *e) {
 }
 
 /* Long MFK press: with the Cluster item active, tune to the highlighted spot.
- * The press already toggled the MFK state; toggle it back to keep browsing. */
+ * The press already toggled the MFK state; toggle it back to keep browsing.
+ * With Knob press: next control the press is watched instead (mfk_held()) */
 static void spectrum_long_pressed_cb(lv_event_t *e) {
+    if (knob_press_next()) return;
     if (mfk_ctrl == CTRL_CLUSTER) {
         cluster_column_tune();
         spectrum_pressed_cb(e);
@@ -2033,6 +2160,7 @@ lv_obj_t * main_screen() {
     msg_init(lv_layer_top());
     msg_tiny_init(lv_layer_top());
 
+    main_call_init();   /* the callsign the layouts show (#292) */
     build();
     buttons_load_page(&buttons_page_vol_1);
     lv_async_call(band_usable_check, NULL);     /* once the radio runs */

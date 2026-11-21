@@ -112,7 +112,8 @@ const CARDS = [
     ["screen_saver_min", "Screensaver after", "Minutes without a key, a knob or TX", "range", [1, 120, 1, 1, " min"]],
     ["screen_saver_speed", "Rain speed", "How fast the Matrix rain falls: Slow takes twice as long, Very slow three times", "sel", ["Normal", "Slow", "Very slow"]],
     ["screen_off_min", "Screen off after", "Minutes without a key or the knob, 0 never; a screensaver shows until then; the next key wakes it", "range", [0, 120, 1, 1, " min"]],
-    ["screen_off_always", "Screen always off", "A radio run from the knob or a browser; POWER shows the screen for a while, no screensaver", "sw"]]],
+    ["screen_off_always", "Screen always off", "A radio run from the knob or a browser; POWER shows the screen for a while, no screensaver", "sw"],
+    ["panel_stripes", "Panel stripes fix", "For a screen with vertical coloured stripes in its darkest shades (some newer X6100s): the radio's display engine sends those shades out a little lighter, which clears the stripes. Off on a screen without them", "sw"]]],
   ["remote", "Remote station", "A radio run from a browser or a TCI client", [
     ["speaker_off", "Speaker always off", "The speaker and the TX monitor stay silent whatever the volume; the sound to the browser, TCI and Bluetooth headphones goes on", "sw"]]],
   ["antenna", "Receiver", "What the radio receives above HF", [
@@ -127,11 +128,13 @@ const CARDS = [
     ["zoom_step_per_mode", "Zoom and step per mode", "Each mode keeps its own waterfall zoom and tuning step; off: one zoom and one step for every mode, a mode change keeps them", "sw"],
     ["step_per_zoom", "Step per zoom", "Each waterfall zoom keeps its own tuning step: the step last used at that zoom comes back with it. Off: the step stays as it is when the zoom changes", "sw"],
     ["power_display", "Power display", "The box at the top right: the battery's charge with the time left or to full, the battery's and the supply's voltages, the two in turn every 5 s, or the charge with the supply's voltage", "sel", ["% + time", "Volts", "Alternate", "% + V"]],
+    ["callsign_show", "Callsign", "Your callsign (Settings → General → STATION) small on the main screen: in front of the locator in the frequency strip, hidden while a split needs the room; Black Metal and Total Black: in the second row at the top, before the battery; Amber Trey: under the display. On the boot logo too, from the next start", "sw"],
     ["clock_12h", "12-hour clock", "The time at the top right as 1:05 PM; off: 13:05", "sw"],
     ["icon_menus", "Icon menus", "APP, Modes and the Settings rail as grids of icons; off: the old text menus", "sw"],
     ["knob_info", "Knob info", "The value shown while a knob turns", "sw"],
     ["buttons_hide", "Hide buttons", "The main screen's five buttons and the knob lines over them hidden after so long without a key, the waterfall down to the bottom; any key brings them back, F1-F5 only that", "seg", ["Off", "3 s", "5 s", "10 s"]],
     ["knob_lines_stay", "Keep knob lines", "With Hide buttons on: the two knob lines stay where they are when the buttons hide, so VOL and the MFK show their control and value there, not on the message line", "sw"],
+    ["knob_press_next", "Knob press: next control", "A short press of VOL or the MFK takes the next control on its list, ready to turn, as the stock firmware does; a long press switches between changing the value and choosing the control (on the cluster column it tunes to the spot). Off: a press does that switch", "sw"],
     ["digi_text_compact", "Decoder text", "CW and RTTY text: large, or compact with more lines", "seg", ["Large", "Compact"]],
     ["mag_freq", "Magnify frequency", "Big frequency while tuning", "sw"],
     ["mag_info", "Magnify info", "A short note when a key switches the VFO, split, the AGC, PRE, ATT or the ATU", "sw"],

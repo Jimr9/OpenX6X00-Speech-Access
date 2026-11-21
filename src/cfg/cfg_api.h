@@ -53,6 +53,8 @@ extern ParamInt         *cfg_band_id;           // p_band_id (persisted current 
 extern ParamInt         *cfg_mic;               // p_mic
 extern ParamInt         *cfg_wefax_align;       // p_wefax_align, WEFAX picture shift
 extern ParamInt         *cfg_wefax_tilt;        // p_wefax_tilt, WEFAX picture slant
+extern ParamInt         *cfg_wefax_plan;        // p_wefax_plan, WEFAX Auto Plan on when the app opens
+extern ParamInt         *cfg_wefax_night;       // p_wefax_night, WEFAX charts dimmed: 0 Auto (sun down), 1 On, 2 Off
 extern ParamInt         *cfg_hmic;              // p_hmic
 extern ParamInt         *cfg_imic;              // p_imic
 extern ParamInt         *cfg_moni;              // p_moni
@@ -63,6 +65,8 @@ extern ParamInt         *cfg_auto_level_enabled; // p_auto_level_enabled
 extern ParamFloat       *cfg_auto_level_offset;  // p_auto_level_offset
 extern ParamInt         *cfg_knob_info;          // p_knob_info
 extern ParamInt         *cfg_buttons_hide;       // p_buttons_hide
+extern ParamInt         *cfg_knob_press_next;    // p_knob_press_next
+extern ParamInt         *cfg_panel_stripes;      // p_panel_stripes
 extern ParamInt         *cfg_mode_from_plan;     // p_mode_from_plan
 extern ParamInt         *cfg_band_region;        // p_band_region
 extern ParamInt         *cfg_birdie_marks;       // p_birdie_marks
@@ -78,6 +82,7 @@ extern ParamInt         *cfg_band_plan;          // p_band_plan
 extern ParamInt         *cfg_wr12;               // p_wr12 (the X6200: the WR12 on HOST)
 extern ParamInt         *cfg_speaker_off;        // p_speaker_off
 extern ParamInt         *cfg_kbd_layout;         // p_kbd_layout
+extern ParamInt         *cfg_mic_updown;         // p_mic_updown: what the hand mic's UP/DOWN do (mic_updown.h)
 extern ParamInt         *cfg_smeter_needle;      // p_smeter_needle
 extern ParamInt         *cfg_smeter_color;       // p_smeter_color
 extern ParamInt         *cfg_wf_palette;         // p_wf_palette
@@ -120,6 +125,7 @@ extern ParamInt         *cfg_wf_3d_glide;        // p_wf_3d_glide
 extern ParamInt         *cfg_wf_3d_range;        // p_wf_3d_range
 extern ParamText        *cfg_encoder_bind;       // p_encoder_bind
 extern ParamInt         *cfg_power_display;      // p_power_display
+extern ParamInt         *cfg_callsign_show;      // p_callsign_show: the callsign on the main screen (#292)
 
 // VOX
 extern ParamInt *cfg_vox_on;   // p_vox_en
@@ -160,6 +166,7 @@ extern ParamInt *cfg_svx_limit;      // p_svx_limit
 extern ParamInt *cfg_svx_pause;      // p_svx_pause
 extern ParamInt *cfg_svx_id;         // p_svx_id
 extern ParamInt *cfg_svx_id_min;     // p_svx_id_min
+extern ParamInt *cfg_dmr_tg;         // p_dmr_tg
 extern ParamInt *cfg_field_boot;     // p_field_boot
 extern ParamInt *cfg_field_respot;   // p_field_respot
 extern ParamInt *cfg_voice_msg_gain; // p_voice_msg_gain
@@ -201,6 +208,8 @@ extern ParamInt   *cfg_paddle_serial;       // p_paddle_serial
 extern ParamInt   *cfg_cwt_level;           // p_cwt_level
 extern ParamInt   *cfg_cwt_group;           // p_cwt_group
 extern ParamInt   *cfg_cwt_tx_fixed;        // p_cwt_tx_fixed
+extern ParamInt   *cfg_cwt_copy_level;      // p_cwt_copy_level
+extern ParamInt   *cfg_cwt_copy_group;      // p_cwt_copy_group
 extern ParamInt   *cfg_cw_decoder;         // p_cw_decoder
 extern ParamInt   *cfg_cw_tune;            // p_cw_tune
 extern ParamInt   *cfg_cw_live;            // p_cw_live
@@ -245,6 +254,10 @@ extern ParamText  *cfg_country;              // p_country
 
 // APP > Weather > Notices: the warnings checked in the background, a new one as a notice
 extern ParamInt   *cfg_meteo_alerts;         // p_meteo_alerts
+// Where the weather is asked for (meteo.h, METEO_FROM_*) and the place typed for it
+extern ParamInt   *cfg_meteo_from;           // p_meteo_from
+extern ParamText  *cfg_meteo_place;          // p_meteo_place
+extern ParamText  *cfg_kbd_dev_volume;       // p_kbd_dev_volume (kbd_devices.h)
 
 // Waterfall Mode Fixed: when the view moves on, and where the line goes
 extern ParamInt   *cfg_wf_fixed_jump;        // p_wf_fixed_jump

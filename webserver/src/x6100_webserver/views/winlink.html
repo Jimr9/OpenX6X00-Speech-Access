@@ -67,7 +67,7 @@
     <div class="dp-ctl"><input id="password" type="password" autocomplete="new-password" maxlength="64" placeholder="New password (empty = keep)"> <button type="button" id="pw-clear">Clear</button></div>
   </div>
   <div class="dp-row">
-    <div class="dp-lbl"><label for="modem"><b>Modem</b></label><span>ARDOP: the gateways in Pat's list. Mercury: faster on a good path, but only with a station that runs Mercury 1.9.20 or later (station to station, or one of the few gateways that run it), dialled by hand in Pat as VARA HF. XARA: speaks VARA HF, so the VARA HF gateways in Pat's list answer it (Connect, VARA HF), at VARA's free speed unless you tick your VARA HF licence below. Mercury and XARA cost the radio more processor and heat. One runs at a time</span></div>
+    <div class="dp-lbl"><label for="modem"><b>Modem</b></label><span>ARDOP: the gateways in Pat's list. Mercury: faster on a good path, but only with a station that runs Mercury 1.9.20 or later (station to station, or one of the few gateways that run it), dialled by hand in Pat as VARA HF. XARA: speaks VARA HF, so the VARA HF gateways in Pat's list answer it (Connect, VARA HF), at VARA's free speed unless you tick your VARA HF licence below. Mercury and XARA cost the radio more processor and heat. One runs at a time: a connection in Pat through the other transport switches to it (VARA HF: the last of Mercury and XARA chosen, XARA at first), and this row follows</span></div>
     <div class="dp-ctl"><select id="modem"><option value="ardop">ARDOP</option><option value="mercury">Mercury (experimental)</option><option value="xara">XARA (experimental, VARA-compatible)</option></select></div>
   </div>
   <div class="dp-row" id="row-bandwidth">
@@ -107,7 +107,7 @@
       <li>The password is kept on the radio's system partition: not in the Backup, not on the Files page. A new card image asks for it again. The mail itself is on the SD card (<code>/mnt/winlink</code>) and stays.</li>
       <li>Sessions with gateways work: reported on an X6100 on 80 m and from the UK to Germany on 40 m, and an X6200 got as far as the login.</li>
       <li>Mercury is experimental: tested between two stations on a PC, not yet on the air; on an X6100 it takes about one of the radio's four processor cores (not measured on an X6200 yet). In the mailbox: Connect, VARA HF, then the other station's call and frequency by hand: the VARA HF gateway list shows VARA gateways, which do not answer Mercury. ARDOP's gateways do not answer it either.</li>
-      <li>XARA is experimental: a VARA-compatible modem by another author (MIT licence), not VARA itself. Tested between two stations on a PC, not yet on the air from a radio or with a VARA gateway, and its processor load on the radios is not measured yet. In the mailbox: Connect, VARA HF, then a gateway from Pat's VARA HF list. It needs your callsign (up to 7 letters and digits, an SSID from -1 to -19). The VARA HF licence box is your own statement; the radio does not check it.</li>
+      <li>XARA is experimental: a VARA-compatible modem by other authors (x0rro's, carried on by NR5P; MIT licence), not VARA itself. x0rro's version, the firmware's up to v0.3.9, delivered mail from an X6100 to and from VARA HF gateways; NR5P's, which this firmware has, is tested on a PC only so far. Its processor load on the radios is measured only while it listens. In the mailbox: Connect, VARA HF, then a gateway from Pat's VARA HF list. It needs your callsign (up to 7 letters and digits, an SSID from -1 to -19). The VARA HF licence box is your own statement; the radio does not check it.</li>
     </ul>
   </div>
 </div>
@@ -163,7 +163,7 @@ var renderRadio = function(st) {
   radioRow("freq", mhz(r.rx), r.simplex ? "No TX: " + r.simplex :
     r.tx === r.rx ? "Transmits on the same frequency, as Winlink must" : "TX " + mhz(r.tx), !!r.simplex);
   radioRow("mode", r.mode, r.mode === "USB-D" ? "" : r.mode === "USB" ? m.name + " works in USB too" :
-    "Pat's QSY to a gateway sets USB-D", false);
+    "USB-D comes with Pat's QSY to a gateway, or at the modem's first key", false);
   const lo = 1500 - m.span / 2, hi = 1500 + m.span / 2;
   const rxOk = r.filter_low <= lo && r.filter_high >= hi;
   const tx = r.tx_filter_high > 0, txOk = !tx || (r.tx_filter_low <= lo && r.tx_filter_high >= hi);
@@ -224,8 +224,22 @@ var renderConnections = function(st) {
 }
 const form = EditFlow.form($("#conf"), $("#status"), $("#conf button[type=submit]"));
 
+// The Modem row follows the radio's choice: a connection through the other transport in Pat switches the modem
+// (#296). Not while a choice made here is not saved yet; other fields being edited stay as they are
+var shownModem = null;
+var followModem = function(st) {
+  const now = st.modem_choice || "ardop";
+  if (shownModem === null || now === shownModem || $("#modem").val() !== shownModem) return;
+  const clean = !EditFlow.dirty($("#conf"));
+  $("#modem").val(now);
+  showModem();
+  if (clean) form.reset(); else form.check();
+  shownModem = now;
+}
+
 // The status, the switch and the notes: every two seconds, without touching what is being typed below
 var renderState = function(st) {
+  followModem(st);
   if (!busy) $("#enabled").prop("checked", !!st.enabled);
   $("#enabled").prop("disabled", busy);
   $("#text").text(st.text || st.state);
@@ -259,6 +273,7 @@ var render = function(st) {
   $("#password").val("");
   $("#bandwidth").val(String(st.bandwidth));
   $("#modem").val(st.modem_choice || "ardop");
+  shownModem = st.modem_choice || "ardop";
   $("#mercury_bandwidth").val(String(st.mercury_bandwidth || 2300));
   $("#xara_bandwidth").val(String(st.xara_bandwidth || 2300));
   $("#vara_licence").prop("checked", !!st.vara_licence);

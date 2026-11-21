@@ -38,13 +38,15 @@ target_sources(${PROJECT_NAME} PUBLIC
     apps_menu.c
     birdie.c dialog_birdie.c dialog_flights.c
     dialog_zello.c zello.c voice_net.c voice_link.c voice_ptt.c dialog_svx.c svx.c svx_proto.c
+    dialog_dmr.c dmr_ambe.c dmr_proto.c
     dialog_meteo.c meteo.c meteo_alerts.c
-    first_start.c first_start_rule.c
-    dialog_cw_trainer.c
+    first_start.c first_start_rule.c first_start_kbd.c
+    dialog_cw_trainer.c cw_trainer_score.c
     dialog_cw_kbd.c recolor_rows.c
     theme.c
-    freq_strip.c
+    freq_strip.c main_call.c boot_cw.c
     lcd_panel.c
+    panel_stripes.c
     freq_scale.c
     spot_marks.c
     band_plan.c
@@ -59,7 +61,8 @@ target_sources(${PROJECT_NAME} PUBLIC
     sstv/sstv_tx.c
     sstv/sstv_png.c
     sstv/denoise.c
-    wefax_window.c wefax/decoder.c wefax/encoder.c
+    wefax_window.c wefax_bulletin.c wefax_viewer.c wefax_night.c wefax/decoder.c wefax/encoder.c wefax/plan.c
+    wefax/quality.c wefax/thumb.c wefax/tilt.c wefax/night.c clock_sync.c clock_rule.c time_station.c
     navtex_window.c navtex/sitorb.c navtex/dsc.c
     dialog_freedv.c freedv_rx.c freedv_text.c freedv_tx.c
     channel_list.c broadcast_db.c cJSON.c
@@ -83,6 +86,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     winlink.c
     i18n.cpp
     voice.cpp voice_focus.c voice_text.c bootmenu.c
+    winlink_mail.c
 )
 
 # Spoken feedback (voice.cpp): RHVoice, when the system has it (the radio's image with BR2_PACKAGE_RHVOICE).
@@ -161,7 +165,7 @@ endif()
 # radio backend's library, liquid-dsp and ft8_lib
 target_link_libraries(${PROJECT_NAME} PRIVATE
     PkgConfig::deps ${GPS_LIBS}
-    FT8 QTH CLUSTER FIELD WSPR CW_DECODER JS8 cfg
+    FT8 QTH CLUSTER FIELD WSPR CW_DECODER JS8 cfg mbe
     Threads::Threads
     lvgl lvgl::drivers
     ${HW_LIBS} liquid ft8

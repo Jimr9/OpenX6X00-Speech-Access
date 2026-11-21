@@ -58,13 +58,15 @@ static const struct {
     {"Recorder", "RX audio", "recorder", OPEN_APP, ACTION_APP_RECORDER},
     {"CW Trainer", "Learn CW", "trainer", OPEN_APP, ACTION_APP_CWTRAINER},
     {"CW Keyboard", "CW as you type", "text", OPEN_APP, ACTION_APP_CW_KBD},   /* the keyboard of RTTY, PSK */
-    {"GPS", "Position, time", "gps", OPEN_APP, ACTION_APP_GPS},
+    {"Mail", "Winlink, no phone", "mail", OPEN_APP, ACTION_APP_MAIL},
+    {"GPS / Clock", "Position, clock", "gps", OPEN_APP, ACTION_APP_GPS},
     {"Screen Rec", "Screen and audio", "screenrec", OPEN_SCREEN_REC, 0},
     {"Walkie", "Portrait screen", "walkie", OPEN_WALKIE, 0},
     {"Birdie Cal", "Find birdies, antenna off", "birdie", OPEN_APP, ACTION_APP_BIRDIE},
     {"Web radio", "Internet stations", "iradio", OPEN_APP, ACTION_APP_IRADIO},     /* "Internet radio" is cut in 1bit */
     {"Zello", "Internet voice", "zello", OPEN_APP, ACTION_APP_ZELLO},
     {"SVXConnect", "Reflector talkgroups", "svx", OPEN_APP, ACTION_APP_SVX},
+    {"DMR", "Talkgroups, listen only", "dmr", OPEN_APP, ACTION_APP_DMR},
     {"Flights", "Aircraft around", "flights", OPEN_APP, ACTION_APP_FLIGHTS},
     {"HF Air Band", "Oceanic routes, VOLMET", "aero", OPEN_APP, ACTION_APP_AERO},
     {"CB", "27 MHz channels", "cb", OPEN_APP, ACTION_APP_CB},

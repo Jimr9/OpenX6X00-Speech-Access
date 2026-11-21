@@ -17,12 +17,14 @@
  *    {"cmd":"tune","hz":hz,"mode":"USB-D"}            -> {"t":"ok"} or {"t":"err","err":"..."}: a click on a spot in
  *                                                        Wavelog; frequency and mode only, refused while transmitting
  *    {"cmd":"pos_get"}                                -> {"t":"pos","lat":..,"lon":..,"src":"GPS"|"Phone"|"Locator"|
- *                                                        "Country","cc":"BE","country":..,"lang":"nl","notices":0|1}:
- *                                                        where the radio is (station_position), else the place of its
- *                                                        country (meteo_position), "src":"" without either; the
- *                                                        country, the GUI's language and APP > Weather > Notices. For
- *                                                        the web Flights page (which leaves "Country" aside) and the
- *                                                        web Weather page
+ *                                                        "Typed"|"Country","place":..,"cc":"BE","country":..,
+ *                                                        "lang":"nl","notices":0|1}: where the weather is asked for
+ *                                                        (meteo_position: where the radio is, or the locator or the
+ *                                                        place typed as Settings > General > STATION > Weather from
+ *                                                        says, else the place of its country), "src":"" without any;
+ *                                                        "place" the one typed; the country, the GUI's language and
+ *                                                        APP > Weather > Notices. For the web Flights page (which
+ *                                                        leaves "Country" aside) and the web Weather page
  *  The values are checked here and applied on the LVGL thread through the scheduler, as the
  *  Settings pages apply them.
  *
@@ -113,6 +115,8 @@ static const struct {
     {"knob_info", &cfg_sm.p_knob_info, 0, 1},
     {"buttons_hide", &cfg_sm.p_buttons_hide, 0, 3},     /* live: screen_main.c follows it */
     {"knob_lines_stay", &cfg_sm.p_knob_lines_stay, 0, 1},   /* live: knob_info.cpp follows it */
+    {"knob_press_next", &cfg_sm.p_knob_press_next, 0, 1},   /* live: screen_main.c reads it at each press */
+    {"panel_stripes", &cfg_sm.p_panel_stripes, 0, 1},   /* live: panel_stripes.c follows it */
     {"walkie", &cfg_sm.p_walkie, 0, 1},                 /* live: walkie.c follows it */
     {"speaker_off", &cfg_sm.p_speaker_off, 0, 1},       /* live: radio.c follows it */
     {"indep_vfo", &cfg_sm.p_indep_vfo, 0, 1},           /* Station: independent VFOs */
@@ -122,6 +126,7 @@ static const struct {
     {"zoom_step_per_mode", &cfg_sm.p_zoom_step_per_mode, 0, 1},   /* Main screen: live, zoom_step_scope follows it */
     {"step_per_zoom", &cfg_sm.p_step_per_zoom, 0, 1},   /* Main screen (#132): live, step_zoom follows it */
     {"power_display", &cfg_sm.p_power_display, 0, 3},  /* Main screen: live, clock.c reads it */
+    {"callsign_show", &cfg_sm.p_callsign_show, 0, 1},  /* Main screen (#292): live, main_call.c follows it */
     {"tx_outside_bands", &cfg_sm.p_tx_outside_bands, 0, 1},   /* TX Cal (#121): live, radio.c, info_bar.c and
                                                                  * freq_strip.c follow it */
     {"tx_ranges", &cfg_sm.p_tx_ranges, TX_RANGES_BANDS, TX_RANGES_OWN},  /* TX Cal (#247): the same; Own list reads
@@ -445,16 +450,18 @@ typedef struct {
     double      lat, lon;
     const char *src;
     bool        ok;
+    char        place[METEO_PLACE_MAX];     /* the place typed for the weather, "" none */
 } pos_req_t;
 
 static void pos_cb(void *arg) {
     pos_req_t *p = (pos_req_t *)arg;
 
     p->ok = meteo_position(&p->lat, &p->lon, &p->src);
+    snprintf(p->place, sizeof(p->place), "%s", cfg_sm.p_meteo_place.get().c_str());
 }
 
 static const char *pos_get(char *out, size_t size, int *l) {
-    pos_req_t   p = {0, 0, "", false};
+    pos_req_t   p = {0, 0, "", false, ""};
     char        cc[3];
     cJSON      *o;
     char       *text;
@@ -468,6 +475,7 @@ static const char *pos_get(char *out, size_t size, int *l) {
         cJSON_AddNumberToObject(o, "lon", p.lon);
     }
     cJSON_AddStringToObject(o, "src", p.ok ? p.src : "");
+    cJSON_AddStringToObject(o, "place", p.place);
     cJSON_AddStringToObject(o, "cc", country_code(cc));
     cJSON_AddStringToObject(o, "country", country_name(country_now()));
     cJSON_AddStringToObject(o, "lang", i18n_code()[0] ? i18n_code() : "en");

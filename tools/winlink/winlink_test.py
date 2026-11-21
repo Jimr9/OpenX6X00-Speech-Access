@@ -4,17 +4,25 @@ X6100_WINLINK_ROOT set to a new temporary directory, so every path it uses is un
 functions. Standard library only:
 
     python3 -B tools/winlink/winlink_test.py [-v]
+
+The test of Pat's modem switch with the supervisor itself (SwitchWithTheSupervisor) puts stand-ins on Pat's and the
+modems' ports, so it runs only in a network namespace of its own, as `make -C tools/winlink test` runs this file:
+    unshare -rn sh -c 'ip link set lo up && WINLINK_NETNS=1 python3 -B tools/winlink/winlink_test.py'
 """
 import configparser
 import contextlib
+import fcntl
 import importlib.machinery
 import importlib.util
 import io
 import json
 import os
 import shutil
+import socket
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -785,10 +793,15 @@ class XaraOutcomes(Logs):
     def test_behind(self):
         self.poll(xara="xara: connected to the GUI's socket /run/ardop.sock", kind="xara")
         behind = "xara: audio: 120 ms of capture waiting to be read (xara is falling behind real time: CPU overload?)"
+        # one block that took long (XARA making its frame to send) leaves some 120 ms, the next doubling 240: drained
+        self.assertEqual(self.poll(xara=behind, kind="xara")["modem"], "ready")
+        self.assertEqual(self.poll(xara=behind.replace("120", "240"), kind="xara")["modem"], "ready")
+        self.assertEqual(len(self.notes()), 0, "not the processor short")
+        behind = behind.replace("120", "480")
         self.assertEqual(self.poll(xara=behind, kind="xara")["modem"], "behind")
         self.assertEqual(len(self.notes()), 1)
         self.assertIn("OpenX6X00: XARA could not keep up with the receiver", self.notes()[0])
-        self.poll(xara=behind.replace("120", "240"), kind="xara")
+        self.poll(xara=behind.replace("480", "960"), kind="xara")
         self.assertEqual(len(self.notes()), 1, "once in ten minutes")
         self.watch.behind -= self.wl.MERCURY_BEHIND
         self.assertEqual(self.poll(kind="xara")["modem"], "ready")
@@ -1006,6 +1019,551 @@ class Tails(Root):
         self.assertEqual(t.lines(), ["after the trim"])
         t.again()
         self.assertEqual(t.lines(), ["after the trim"])
+
+
+# ---- Pat's own choice of the modem (#296): x6100-winlink switch ------------------------------------------------
+
+def status_of(kind, state="running", modem="ready", pat="running", text="Running as N0AAA"):
+    """A status file as the supervisor's report() writes it with that modem chosen"""
+    st = {"state": state, "text": text, "pat": pat, **{m: "off" for m in ("ardop", "mercury", "xara")},
+          kind: "running" if state == "running" else "stopped", "modem": modem}
+    return "".join(f"{k}={v}\n" for k, v in st.items())
+
+
+# A stand-in supervisor for the command run as Pat runs it: the lock held with its pid in it, a poke taken
+SUPERVISOR_LOCK = """import fcntl, os, signal, sys, time
+signal.signal(signal.SIGUSR1, lambda *_: None)
+f = open(sys.argv[1], "a+")
+fcntl.flock(f, fcntl.LOCK_EX)
+f.truncate(0)
+f.write(f"{os.getpid()}\\n")
+f.flush()
+print("holding", flush=True)
+time.sleep(60)
+"""
+
+
+class Switch(Root):
+    """switch_modem() with a stand-in for the supervisor: a poke makes it answer, as the real one does, with the
+    status of the modem now chosen"""
+
+    def setUp(self):
+        super().setUp()
+        for p in (self.wl.ARDOPCF, self.wl.MERCURY, self.wl.XARA):
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(p, 0o755)
+        open(self.wl.PAT_OWN_LOG, "w").close()               # Pat runs: its log is there
+        self.wl.SWITCH_LOOK, self.wl.SWITCH_WAIT, self.wl.SWITCH_SETTLE = 0.02, 1, 1
+        self.wl.supervisor_pid = lambda: 4242
+        self.wl.poke = self.poked
+        self.listening = self.wl.listening
+        self.wl.listening = lambda port: port in self.ports
+        self.ports = {8515, 8300}
+        self.pokes = []
+        self.then = "ready"                                  # what the stand-in does: ready, fails, waits, page
+
+    def poked(self):
+        """The supervisor: the switch file is there before the setting, and names the modem it says"""
+        conf = self.wl.read_conf()
+        self.pokes.append((conf.get("modem"), self.wl.read_kv(self.wl.SWITCH).get("modem")))
+        kind = self.wl.conf_modem(conf)
+        if self.then == "ready":
+            self.status(kind)
+        elif self.then == "fails":
+            self.status(kind, state="error", modem="off",
+                        text="XARA (xara) stopped (code 1: no sound card); starting it again in 5 s")
+        elif self.then == "waits":
+            self.status(kind, modem="waiting", text="Running as N0AAA; XARA waits for the radio's audio (the GUI)")
+        elif self.then == "page":                            # the page chose Mercury meanwhile
+            self.conf(**dict(conf, modem="mercury"))
+        return True
+
+    def status(self, kind, **kw):
+        with open(self.wl.STATUS, "w") as f:
+            f.write(status_of(kind, **kw))
+
+    def notes(self):
+        return [ln.split(" OpenX6X00: ", 1)[1] for ln in read(self.wl.PAT_OWN_LOG).splitlines()
+                if " OpenX6X00: " in ln]
+
+    def test_varahf_while_ardop_runs_switches_to_xara(self):
+        """None of Mercury and XARA chosen before: XARA, at its own bandwidth"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop", mercury_bandwidth=500, xara_bandwidth=2750)
+        self.status("ardop")
+        self.assertEqual(self.wl.switch_modem("varahf"), (True, "2750"))
+        self.assertEqual(self.pokes, [("xara", "xara")])
+        conf = self.wl.read_conf()
+        self.assertEqual((conf["modem"], conf["varahf_modem"]), ("xara", "xara"))
+        self.assertEqual(self.notes(), [
+            "switching the modem from ARDOP to XARA for this connection through VARA HF",
+            "XARA is ready and the connection goes ahead; the modem stays XARA, as the Winlink page "
+            "(Operating > Winlink) now shows"])
+        self.assertFalse(os.path.exists(self.wl.SWITCH))      # gone once over
+
+    def test_ardop_while_xara_runs_switches_to_ardop(self):
+        self.conf(enabled=1, mycall="N0AAA", modem="xara")
+        self.status("xara")
+        self.assertEqual(self.wl.switch_modem("ardop"), (True, ""))
+        conf = self.wl.read_conf()
+        self.assertEqual((conf["modem"], conf["varahf_modem"]), ("ardop", "xara"))
+        self.assertEqual(self.notes()[0], "switching the modem from XARA to ARDOP for this connection through ARDOP")
+
+    def test_mercury_remembered(self):
+        """Mercury the last of the two: VARA HF switches back to it, at Mercury's bandwidth"""
+        self.conf(enabled=1, mycall="N0AAA", modem="mercury", mercury_bandwidth=500, xara_bandwidth=2300)
+        self.status("mercury")
+        self.assertEqual(self.wl.switch_modem("ardop"), (True, ""))
+        self.assertEqual(self.wl.read_conf()["varahf_modem"], "mercury")
+        self.assertEqual(self.wl.switch_modem("varahf"), (True, "500"))
+        self.assertEqual(self.wl.read_conf()["modem"], "mercury")
+        # As the Winlink page leaves it (varahf_modem= of its own), with ARDOP chosen there
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop", varahf_modem="mercury")
+        self.status("ardop")
+        self.assertEqual(self.wl.switch_modem("varahf"), (True, "2300"))
+        self.assertEqual(self.wl.read_conf()["modem"], "mercury")
+
+    def test_mercury_when_xara_is_not_there(self):
+        os.remove(self.wl.XARA)
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        self.assertEqual(self.wl.switch_modem("varahf"), (True, "2300"))
+        self.assertEqual(self.wl.read_conf()["modem"], "mercury")
+
+    def test_no_switch_when_the_right_modem_runs(self):
+        for kind, via, bw in (("ardop", "ardop", ""), ("mercury", "varahf", "500"), ("xara", "varahf", "2750")):
+            self.conf(enabled=1, mycall="N0AAA", modem=kind, mercury_bandwidth=500, xara_bandwidth=2750)
+            before = read(self.wl.CONF)
+            self.status(kind)
+            self.assertEqual(self.wl.switch_modem(via), (True, bw), kind)
+            self.assertEqual(read(self.wl.CONF), before)
+        self.assertEqual((self.pokes, self.notes()), ([], []))
+
+    def test_only_the_modem_changes(self):
+        """The bandwidths, the VARA HF licence tick and what else is in the file stay as they were"""
+        self.conf(enabled=1, mycall="N0AAA", locator="JO20ab", bandwidth=200, modem="ardop", mercury_bandwidth=500,
+                  xara_bandwidth=2750, vara_licence=1, xara_path_ms="20,30,40")
+        self.status("ardop")
+        self.assertEqual(self.wl.switch_modem("varahf"), (True, "2750"))
+        self.assertEqual(read(self.wl.CONF), "enabled=1\nmycall=N0AAA\nlocator=JO20ab\nbandwidth=200\nmodem=xara\n"
+                                             "mercury_bandwidth=500\nxara_bandwidth=2750\nvara_licence=1\n"
+                                             "xara_path_ms=20,30,40\nvarahf_modem=xara\n")
+
+    def test_the_modem_fails_to_start(self):
+        """A clear line in Pat's log, nothing dialed; the setting stays the new modem's, which the page shows with
+        its error, and the supervisor tries it again"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        self.then = "fails"
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertEqual(self.notes()[-1], "no connection through VARA HF: XARA did not start (XARA (xara) stopped "
+                         "(code 1: no sound card); starting it again in 5 s); Pat did not call. The Winlink page "
+                         "(Operating > Winlink) says how XARA is doing: connect again once it says the modem is "
+                         "ready, or choose another modem there")
+        self.assertEqual(self.wl.read_conf()["modem"], "xara")
+        self.assertFalse(os.path.exists(self.wl.SWITCH))
+
+    def test_not_ready_in_time(self):
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        self.then = "waits"
+        start = time.time()
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertLess(time.time() - start, 3)
+        self.assertTrue(self.notes()[-1].startswith("no connection through VARA HF: XARA was not ready within 1 s "
+                                                    "(Running as N0AAA; XARA waits for the radio's audio (the GUI))"))
+
+    def test_the_tnc_port_open_first(self):
+        """On the radio's audio is not enough: Pat reaches the modem on its TNC port"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        self.ports = set()
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertIn("XARA was not ready within 1 s", self.notes()[-1])
+
+    def test_xara_refused_before_switching(self):
+        """No callsign XARA takes: said, and the modem left as it is"""
+        self.conf(enabled=1, mycall="", modem="ardop")
+        self.status("ardop")
+        before = read(self.wl.CONF)
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertEqual((read(self.wl.CONF), self.pokes), (before, []))
+        self.assertEqual(self.notes(), ["no connection through VARA HF: XARA needs your callsign: set it on the "
+                                        "Winlink page (Operating > Winlink), or the radio's in Settings > General; "
+                                        "Pat did not call"])
+
+    def test_a_change_of_the_pages_is_finished_first(self):
+        """Mercury just chosen on the page, the supervisor still on ARDOP: the switch waits for it, then switches"""
+        self.conf(enabled=1, mycall="N0AAA", modem="mercury")
+        self.status("ardop")
+        timer = threading.Timer(0.3, self.status, ("mercury",))
+        timer.start()
+        self.addCleanup(timer.cancel)
+        start = time.time()
+        self.assertEqual(self.wl.switch_modem("ardop"), (True, ""))
+        self.assertGreater(time.time() - start, 0.25)
+        self.assertEqual(self.pokes, [("ardop", "ardop")])
+        # Pat restarting with the page's change: not settled either, and not for ever
+        self.conf(enabled=1, mycall="N0AAA", modem="xara")
+        self.status("ardop", pat="starting", text="Restarting Pat with the new settings...")
+        self.assertEqual(self.wl.switch_modem("ardop"), (False, ""))
+        self.assertEqual(self.notes()[-1], "no connection through ARDOP: the radio is still busy with the Winlink "
+                                           "page's last change (Restarting Pat with the new settings...); Pat did "
+                                           "not call. Connect again once that page says the modem is ready")
+        self.assertEqual(self.wl.read_conf()["modem"], "xara")
+
+    def test_the_page_changed_it_meanwhile(self):
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        self.then = "page"
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertEqual(self.notes()[-1], "no connection through VARA HF: the modem was changed on the Winlink page "
+                                           "meanwhile, to Mercury; Pat did not call")
+        self.assertEqual(self.wl.read_conf()["modem"], "mercury")
+
+    def test_no_supervisor(self):
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        self.wl.supervisor_pid = lambda: 0
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertTrue(self.notes()[-1].startswith("no connection through VARA HF: Winlink's supervisor does not run"))
+        self.assertEqual(self.wl.read_conf()["modem"], "ardop")
+
+    def test_other_transports_refused(self):
+        """Our Pat asks for ardop and varahf only; anything else is refused here, the settings untouched"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        before = read(self.wl.CONF)
+        for args in (["telnet"], ["varafm"], [], ["ardop", "varahf"]):
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(self.wl.main(["switch", *args]), 1, args)
+            self.assertIn("usage: x6100-winlink switch ardop|varahf", err.getvalue())
+        self.assertEqual((read(self.wl.CONF), self.pokes, self.notes()), (before, [], []))
+
+    def test_one_at_a_time(self):
+        """A second switch waits for the first one"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        lock = open(self.wl.SWITCH_LOCK, "a")
+        self.addCleanup(lock.close)
+        fcntl.flock(lock, fcntl.LOCK_EX)                     # the first one
+        out = io.StringIO()
+        t = threading.Thread(target=lambda: self.__dict__.update(code=self.wl.cmd_switch(["varahf"])))
+        with contextlib.redirect_stdout(out):
+            t.start()
+            t.join(0.3)
+            self.assertTrue(t.is_alive())
+            self.assertEqual(self.pokes, [])
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            t.join(5)
+        self.assertEqual((self.code, out.getvalue()), (0, "bw=2300\n"))
+
+    def test_as_pat_runs_it(self):
+        """The command line, as our Pat runs it: no switch needed here, so no supervisor either"""
+        for modem, via, out in (("xara", "varahf", "bw=2750\n"), ("ardop", "ardop", "")):
+            self.conf(enabled=1, mycall="N0AAA", modem=modem, xara_bandwidth=2750)
+            r = subprocess.run([sys.executable, "-I", SUPERVISOR, "switch", via], capture_output=True, text=True,
+                               env=dict(os.environ, X6100_WINLINK_ROOT=self.root), timeout=30)
+            self.assertEqual((r.returncode, r.stdout, r.stderr), (0, out, ""), modem)
+
+    def test_abort_before_anything_changed(self):
+        """Pat's Abort (SIGTERM) while the switch waits for the page's last change: nothing changed, nothing said
+        (Pat says it)"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop", pat="starting", text="Restarting Pat with the new settings...")
+        before = read(self.wl.CONF)
+        timer = threading.Timer(0.1, self.wl._given_up.append, (1,))
+        timer.start()
+        self.addCleanup(timer.cancel)
+        start = time.time()
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertLess(time.time() - start, 0.6)
+        self.assertEqual((read(self.wl.CONF), self.pokes, self.notes()), (before, [], []))
+        self.assertFalse(os.path.exists(self.wl.SWITCH))
+
+    def test_abort_during_the_switch(self):
+        """Pat's Abort while the new modem starts: the switch stops waiting, the modem goes on to the new one (the
+        setting and the switch file stay, for a supervisor that has not read them yet)"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        self.then = "waits"
+        timer = threading.Timer(0.2, self.wl._given_up.append, (1,))
+        timer.start()
+        self.addCleanup(timer.cancel)
+        start = time.time()
+        self.assertEqual(self.wl.switch_modem("varahf"), (False, ""))
+        self.assertLess(time.time() - start, 0.8)
+        self.assertEqual(self.wl.read_conf()["modem"], "xara")
+        self.assertEqual(self.notes(), [
+            "switching the modem from ARDOP to XARA for this connection through VARA HF",
+            "Abort: the switch to XARA goes on without that connection, and the modem stays XARA, as the Winlink "
+            "page (Operating > Winlink) now shows"])
+        now = (dict(WANT, modem="xara"), "hash")
+        self.assertTrue(self.wl.pats_switch((dict(WANT, modem="ardop"), "hash"), now))
+
+    def test_abort_as_pat_sends_it(self):
+        """The command as our Pat runs it, and SIGTERM as Pat sends it on its Abort: exit status 1 at once, with the
+        stand-in supervisor never making the new modem ready"""
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop")
+        self.status("ardop")
+        holder = subprocess.Popen([sys.executable, "-I", "-c", SUPERVISOR_LOCK, self.wl.LOCK], stdout=subprocess.PIPE,
+                                  text=True)
+        self.addCleanup(holder.wait, 10)
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline(), "holding\n")
+        sw = subprocess.Popen([sys.executable, "-I", SUPERVISOR, "switch", "varahf"], stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True, env=dict(os.environ, X6100_WINLINK_ROOT=self.root))
+        self.addCleanup(sw.kill)
+        end = time.time() + 20
+        while not any(n.startswith("switching the modem") for n in self.notes()) and time.time() < end:
+            time.sleep(0.05)
+        time.sleep(0.2)                                      # past the setting and the poke, in its wait
+        sw.terminate()
+        out, err = sw.communicate(timeout=3)
+        self.assertEqual((sw.returncode, out, err), (1, "", ""))
+        self.assertEqual(self.wl.read_conf()["modem"], "xara")
+        self.assertTrue(self.notes()[-1].startswith("Abort: the switch to XARA goes on without that connection"))
+
+    def test_listening(self):
+        """/proc/net/tcp read as it is: a port listened on, and one that is not"""
+        s = socket.socket()
+        self.addCleanup(s.close)
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        self.assertFalse(self.listening(port))
+        s.listen(1)
+        self.assertTrue(self.listening(port))
+
+
+class SwitchSupervisor(Root):
+    """The supervisor's side: it goes on with Pat through Pat's own switch, and restarts it for the page's"""
+
+    def setUp(self):
+        super().setUp()
+        self.want = dict(WANT, modem="ardop")
+        self.now = (self.want, "hash")
+
+    def test_pats_switch(self):
+        self.wl.write_kv(self.wl.SWITCH, {"modem": "xara", "at": time.time()})
+        new = (dict(self.want, modem="xara"), "hash")
+        self.assertTrue(self.wl.pats_switch(self.now, new))
+        self.assertFalse(self.wl.pats_switch(self.now, (dict(self.want, modem="mercury"), "hash")))  # not that one
+        self.assertFalse(self.wl.pats_switch(self.now, (dict(self.want, modem="xara", xara_bandwidth=500), "hash")))
+        self.assertFalse(self.wl.pats_switch(self.now, (dict(self.want, modem="xara"), "new password")))
+        self.assertFalse(self.wl.pats_switch(None, new))
+        self.wl.write_kv(self.wl.SWITCH, {"modem": "xara", "at": time.time() - 600})   # left behind
+        self.assertFalse(self.wl.pats_switch(self.now, new))
+        os.remove(self.wl.SWITCH)
+        self.assertFalse(self.wl.pats_switch(self.now, new))
+
+    def test_pat_told_where_the_switch_is(self):
+        os.makedirs(os.path.dirname(self.wl.PAT), exist_ok=True)
+        with open(self.wl.PAT, "w") as f:
+            f.write(f'#!/bin/sh\necho "${self.wl.SWITCH_ENV}" > "$2.switch"\n')
+        os.chmod(self.wl.PAT, 0o755)
+        os.environ[self.wl.SWITCH_ENV] = "/elsewhere"
+        self.addCleanup(os.environ.pop, self.wl.SWITCH_ENV, None)
+        pat = self.wl.Program("Pat", self.wl.PAT_LOG)
+        self.wl.start_pat(pat, dict(WANT))
+        pat.proc.wait(10)
+        self.assertEqual(read(self.wl.PAT_OWN_LOG + ".switch").strip(), os.path.abspath(SUPERVISOR))
+
+
+class SwitchOutcome(Logs):
+    def test_the_switch_failed(self):
+        """Our line when the switch did not come about is the last connection, as it says, not said again"""
+        line = ("2026/11/18 10:00:00 OpenX6X00: no connection through VARA HF: XARA did not start (XARA (xara) "
+                "stopped (code 1)); Pat did not call. The Winlink page (Operating > Winlink) says how XARA is doing")
+        k = self.poll(pat=line)
+        self.assertEqual(k["last_result"], "failed")
+        self.assertEqual(k["last_text"], "XARA did not start (XARA (xara) stopped (code 1)); Pat did not call. The "
+                                         "Winlink page (Operating > Winlink) says how XARA is doing")
+        self.assertEqual(k["last_next"], "")
+        self.assertEqual(len(self.notes()), 1)              # its own line only
+        k = self.poll(pat="2026/11/18 10:00:00 OpenX6X00: switching the modem from ARDOP to XARA for this "
+                          "connection through VARA HF\n2026/11/18 10:00:04 OpenX6X00: XARA is ready and the "
+                          "connection goes ahead\n2026/11/18 10:00:05 Connecting to N0BBB (varahf)...")
+        self.assertEqual((k["last_result"], k["last_gateway"]), ("dialing", "N0BBB"))
+
+    REFUSED = ("2026/11/19 11:41:53 OpenX6X00: no connection through ARDOP: one through VARA HF is under way, and the "
+               "radio runs one modem at a time")
+
+    def test_a_refusal_during_a_dial_then_its_outcome(self):
+        """The bench's order (19 Nov): an ARDOP connection refused while the VARA HF one waits for a clear channel is
+        shown while it is the latest, and the VARA HF one's outcome replaces it"""
+        k = self.poll(pat="2026/11/19 11:40:13 VARA modem (VARA HF v4.9.0) initialized\n"
+                          "2026/11/19 11:40:13 Connecting to N0CALL (varahf)...\n"
+                          "2026/11/19 11:40:13 Waiting for clear channel...", kind="xara")
+        self.assertEqual((k["last_result"], k["last_gateway"]), ("dialing", "N0CALL"))
+        k = self.poll(pat="2026/11/19 11:41:43 Got abort signal while dialing varahf, cancelling...\n" + self.REFUSED,
+                      kind="xara")
+        self.assertEqual((k["last_result"], k["last_gateway"]), ("failed", ""))
+        self.assertEqual(k["last_text"], "one through VARA HF is under way, and the radio runs one modem at a time")
+        self.assertEqual(self.notes(), [self.REFUSED])       # Pat's own line only
+        k = self.poll(pat="2026/11/19 11:45:13 Unable to establish connection to remote: aborted while waiting for "
+                          "clear channel", kind="xara")
+        self.assertEqual((k["last_result"], k["last_gateway"]), ("failed", "N0CALL"))
+        self.assertEqual(k["last_text"], "The frequency stayed busy, or Abort was chosen while Pat waited for it to "
+                                         "clear")
+        self.assertEqual(k["last_next"], "Try again later, another gateway or another band")
+        self.assertEqual(len(self.notes()), 2)               # its outcome said once
+        self.assertTrue(self.notes()[-1].endswith(" OpenX6X00: " + k["last_text"] + ". " + k["last_next"]))
+        # The next connection, as before
+        k = self.poll(pat="2026/11/19 11:45:26 Connecting to N0CALL (ardop)...")
+        self.assertEqual((k["last_result"], k["last_text"]), ("dialing", "Calling N0CALL"))
+        k = self.poll(pat="2026/11/19 11:46:04 Unable to establish connection to remote: Connect timeout")
+        self.assertEqual((k["last_result"], k["last_text"]), ("failed", "No answer from N0CALL"))
+
+    def test_a_refusal_during_a_dial_that_connects(self):
+        """The ARDOP connection under way connects after the refusal, and goes on to the end: its lines and
+        ardopcf's are its own"""
+        self.poll(pat="2026/11/19 11:40:13 Connecting to N0BBB (ardop)...")
+        k = self.poll(pat="2026/11/19 11:40:20 OpenX6X00: no connection through VARA HF: one through ARDOP is under "
+                          "way, and the radio runs one modem at a time", ardop=ESTABLISHED.format("N0BBB", 500))
+        self.assertEqual((k["last_result"], k["last_bw"]), ("failed", ""))
+        k = self.poll(pat="2026/11/19 11:40:21 Connected to N0BBB (ardop)\nRemote accepted ABC123")
+        self.assertEqual((k["last_result"], k["last_gateway"], k["last_bw"]), ("connected", "N0BBB", 500))
+        k = self.poll(pat="2026/11/19 11:41:00 Disconnected.")
+        self.assertEqual(k["last_text"], "Done with N0BBB at 500 Hz: 1 sent, 0 received")
+
+    def test_a_refusal_during_a_dial_with_no_answer(self):
+        """ardopcf's word for the call under way counts for it, not for the refusal shown meanwhile"""
+        self.poll(pat="2026/11/19 11:40:10 QSY ardop: 7101.5\n2026/11/19 11:40:13 Connecting to N0BBB (ardop)...")
+        self.poll(pat="2026/11/19 11:40:20 OpenX6X00: no connection through VARA HF: one through ARDOP is under way, "
+                      "and the radio runs one modem at a time")
+        k = self.poll(pat="2026/11/19 11:41:00 Unable to establish connection to remote: Connect timeout",
+                      ardop="[STATUS: ARQ CONNECTION REJECTED BY N0BBB, REMOTE STATION BUSY.]")
+        self.assertEqual((k["last_gateway"], k["last_freq"]), ("N0BBB", 7101500))
+        self.assertEqual(k["last_text"], "N0BBB is busy with another station")
+
+    def test_a_refusal_and_pat_restarted(self):
+        """Pat restarted with the dial under way behind a refusal: that dial ends there, shown"""
+        self.poll(pat="2026/11/19 11:40:13 Connecting to N0BBB (ardop)...\n" + self.REFUSED)
+        self.watch.pat_started()
+        open(self.wl.PAT_OWN_LOG, "w").close()
+        k = self.poll()
+        self.assertEqual((k["last_result"], k["last_text"]), ("failed", "Pat stopped during the connection to N0BBB"))
+
+    def test_a_refusal_alone_stays(self):
+        """With nothing under way, a refusal is the last connection until the next one"""
+        self.poll(pat="2026/11/19 11:40:13 Connecting to N0BBB (ardop)...\n"
+                      "2026/11/19 11:41:00 Unable to establish connection to remote: Connect timeout")
+        k = self.poll(pat=self.REFUSED)
+        self.assertEqual(k["last_text"], "one through VARA HF is under way, and the radio runs one modem at a time")
+        k = self.poll(pat="2026/11/19 11:42:00 Waiting for clear channel...")
+        self.assertEqual(k["last_text"], "one through VARA HF is under way, and the radio runs one modem at a time")
+
+    def test_the_old_modems_radio_file_left_out(self):
+        """Just after a switch the GUI's file may still say connected for the modem that stopped"""
+        with open(self.wl.RADIO, "w") as f:
+            f.write(RADIO.format(app="", refused="", seq=0, qsy=0, qsy_why="", qsy_seq=0, swr=0))
+        self.watch.modem_started()
+        old = time.time() - 2
+        os.utime(self.wl.RADIO, (old, old))
+        self.assertEqual(self.poll(kind="xara")["modem"], "waiting")
+        self.assertEqual(self.poll(kind="xara", xara="xara: connected to the GUI's socket /run/ardop.sock")["modem"],
+                         "ready")
+        os.utime(self.wl.RADIO, None)                        # written again since: the GUI's word
+        self.assertEqual(self.poll(kind="xara")["modem"], "ready")
+
+
+FAKE_PAT = """#!{py}
+# A stand-in for Pat: its log made, its start counted, its mailbox's /api/status on 8080
+import http.server, json, os, sys
+log = sys.argv[sys.argv.index("--log") + 1]
+open(log, "a").close()
+with open(os.path.join(os.path.dirname(log), "pat-starts"), "a") as f:
+    f.write(f"{{os.getpid()}}\\n")
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = json.dumps({{"connected": False, "dialing": False, "http_clients": []}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *a):
+        pass
+http.server.HTTPServer.allow_reuse_address = True
+http.server.HTTPServer(("127.0.0.1", 8080), H).serve_forever()
+"""
+
+FAKE_MODEM = """#!{py}
+# A stand-in for a modem: its TNC port open, its line that it is on the GUI's socket, until SIGTERM
+import socket, sys, time
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", {port}))
+s.listen(1)
+print("{said}", flush=True)
+while True:
+    time.sleep(1)
+"""
+
+
+@unittest.skipUnless(os.environ.get("WINLINK_NETNS") == "1",
+                     "needs a network namespace of its own (ports 8080, 8300, 8515): make -C tools/winlink test")
+class SwitchWithTheSupervisor(Root):
+    """The supervisor itself (x6100-winlink run) with stand-ins for Pat and the three modems, and Pat's switch as
+    Pat runs it: the modem swapped, Pat not restarted for it, the page's own change restarting Pat as before"""
+
+    def setUp(self):
+        super().setUp()
+        progs = {self.wl.ARDOPCF: (8515, "Audio socket {sock} connected"),
+                 self.wl.MERCURY: (8300, "x6x00-mercury: connected to {sock}"),
+                 self.wl.XARA: (8300, "xara: connected to the GUI's socket {sock}")}
+        for path, (port, said) in progs.items():
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(FAKE_MODEM.format(py=sys.executable, port=port, said=said.format(sock=self.wl.ARDOP_SOCK)))
+            os.chmod(path, 0o755)
+        with open(self.wl.PAT, "w") as f:
+            f.write(FAKE_PAT.format(py=sys.executable))
+        os.chmod(self.wl.PAT, 0o755)
+        self.conf(enabled=1, mycall="N0AAA", modem="ardop", mercury_bandwidth=500, xara_bandwidth=2300)
+        self.sup = subprocess.Popen([sys.executable, "-I", SUPERVISOR, "run"],
+                                    env=dict(os.environ, X6100_WINLINK_ROOT=self.root),
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(self.stop)
+
+    def stop(self):
+        self.sup.terminate()
+        self.sup.wait(30)
+
+    def until(self, what, test, seconds=20):
+        end = time.time() + seconds
+        while time.time() < end:
+            if test():
+                return
+            time.sleep(0.1)
+        self.fail(f"{what}: status {self.wl.read_kv(self.wl.STATUS)}")
+
+    def starts(self):
+        return read(os.path.join(self.wl.RUN, "pat-starts")).split()
+
+    def test_switched_and_back_pat_running_on(self):
+        self.until("ARDOP ready", lambda: self.wl.modem_ready(self.wl.read_kv(self.wl.STATUS), "ardop")
+                   and self.wl.read_kv(self.wl.STATUS).get("pat") == "running")
+        self.assertEqual(self.wl.switch_modem("varahf"), (True, "2300"))
+        st = self.wl.read_kv(self.wl.STATUS)
+        self.assertEqual((st["ardop"], st["xara"], st["modem"]), ("off", "running", "ready"))
+        self.assertTrue(self.wl.listening(8300) and not self.wl.listening(8515))
+        self.assertEqual(self.wl.read_conf()["modem"], "xara")
+        self.assertEqual(self.wl.switch_modem("ardop"), (True, ""))
+        self.assertEqual(self.wl.read_kv(self.wl.STATUS)["ardop"], "running")
+        self.assertEqual(len(self.starts()), 1)              # Pat went on through both
+        log = read(self.wl.PAT_OWN_LOG)
+        self.assertIn("OpenX6X00: XARA is ready and the connection goes ahead", log)
+        self.assertIn("OpenX6X00: ARDOP is ready and the connection goes ahead", log)
+        # The page's own choice, as before: Pat restarts with it
+        self.conf(enabled=1, mycall="N0AAA", modem="mercury", mercury_bandwidth=500, xara_bandwidth=2300)
+        self.wl.poke()
+        self.until("Mercury ready after the page's choice",
+                   lambda: self.wl.modem_ready(self.wl.read_kv(self.wl.STATUS), "mercury")
+                   and len(self.starts()) == 2)
+        # And as our Pat runs it, the right modem running: at once
+        r = subprocess.run([sys.executable, "-I", SUPERVISOR, "switch", "varahf"], capture_output=True, text=True,
+                           env=dict(os.environ, X6100_WINLINK_ROOT=self.root), timeout=30)
+        self.assertEqual((r.returncode, r.stdout), (0, "bw=500\n"), r.stderr)
 
 
 if __name__ == "__main__":

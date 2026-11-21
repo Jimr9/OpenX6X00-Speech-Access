@@ -119,7 +119,9 @@ def static_files(filepath):
     if isinstance(response, bottle.HTTPError) or response.status_code != 200:
         return response
     response.set_header('Cache-Control', 'max-age=86400')
-    if gzip and 'gzip' in bottle.request.headers.get('Accept-Encoding', ''):
+    # A JPEG or a PNG is compressed already: gzip would only cost the radio its time and a copy in memory
+    if gzip and 'gzip' in bottle.request.headers.get('Accept-Encoding', '') \
+            and not filepath.lower().endswith(('.jpg', '.jpeg', '.png')):
         if filepath not in _gzip_cache:
             with open(os.path.join(STATIC_PATH, filepath), 'rb') as f:
                 _gzip_cache[filepath] = gzip.compress(f.read())
@@ -143,13 +145,14 @@ def plain_page(view='index'):
 def secret_places():
     """The files and folders of the DATA partition that hold secrets (apps.py, SECRET_HIDDEN): the keys of the
     Wavelog and Field pages, the Zello account and developer key, SVXConnect's key and certificate (all of its pki/
-    folder), the copy of the WiFi passwords, the SSH host keys
+    folder), the DMR hotspot password, the copy of the WiFi passwords, the SSH host keys
     and root's SSH files made at each power-off and the Bluetooth link keys (backups/: backup.tgz, bluetooth.tgz), an
     uploaded backup while it waits for Restore (its WiFi passwords) and the WiFi networks a restore replaced"""
     files = [os.path.join(settings.FIELD_DIR, n + tmp) for n in ("wavelog.conf", "qrz.conf", "hota.conf", "wwff.conf")
              for tmp in ("", ".tmp")]
     files += [os.path.join(settings.ZELLO_DIR, n + tmp) for n in ("account.conf", "private_key.pem")
               for tmp in ("", ".tmp")]
+    files += [os.path.join(settings.DMR_DIR, "password" + tmp) for tmp in ("", ".tmp")]
     folders = [os.path.join(settings.FILEBROWSER_PATH, "backups"), settings.BACKUP_WORK,
                os.path.join(settings.BACKUP_SAFETY, "wifi"), os.path.join(settings.SVX_DIR, "pki")]
     return files, folders
