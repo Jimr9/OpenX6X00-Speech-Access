@@ -43,6 +43,11 @@ bool voice_focus_hint_waiting(void);
 #define VOICE_FOCUS_QUIET   LV_OBJ_FLAG_USER_4
 void voice_focus_quiet(lv_obj_t *obj);
 
+/* A text field a window types into itself: the character the cursor is on now ("beginning, K", "end"); and,
+ * called before the deletion, "deleted K" for Backspace (forward false) or Delete (true) */
+void voice_focus_say_cursor(lv_obj_t *ta);
+void voice_focus_say_delete(lv_obj_t *ta, bool forward);
+
 /* A window moving a selection itself (a list following its newest row): the reader says nothing of it meanwhile */
 void voice_focus_mute(bool on);
 

@@ -42,6 +42,9 @@ void voice_sure();
 /* Off, LCD, Always, Off... said and saved */
 void voice_change_mode();
 
+/* The last announcement again, as it was said (Settings > Keys: Repeat last speech, DFL held by default) */
+void voice_repeat_last();
+
 /* Immediately (a key press) */
 void voice_say_text_fmt(const char *fmt, ...);
 /* After the debounce delay, superseding one still waiting (a knob turning) */

@@ -145,6 +145,7 @@ ParamInt         *cfg_voice_pitch         = nullptr;
 ParamInt         *cfg_voice_volume        = nullptr;
 ParamInt         *cfg_voice_interrupt     = nullptr;
 ParamInt         *cfg_voice_read_text     = nullptr;
+ParamInt         *cfg_voice_brief         = nullptr;
 ParamInt         *cfg_voice_repeat_count  = nullptr;
 ParamInt         *cfg_voice_interrupt_delay_ms      = nullptr;
 ParamInt         *cfg_voice_freq_interrupt_delay_ms = nullptr;
@@ -400,6 +401,7 @@ void cfg_api_init(void (*on_db_error)(const char *)) {
     cfg_voice_volume     = &cfg_sm.p_voice_volume;
     cfg_voice_interrupt  = &cfg_sm.p_voice_interrupt;
     cfg_voice_read_text  = &cfg_sm.p_voice_read_text;
+    cfg_voice_brief      = &cfg_sm.p_voice_brief;
     cfg_voice_repeat_count = &cfg_sm.p_voice_repeat_count;
     cfg_voice_interrupt_delay_ms      = &cfg_sm.p_voice_interrupt_delay_ms;
     cfg_voice_freq_interrupt_delay_ms = &cfg_sm.p_voice_freq_interrupt_delay_ms;

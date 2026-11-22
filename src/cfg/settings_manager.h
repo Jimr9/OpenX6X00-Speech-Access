@@ -544,6 +544,9 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_voice_freq_interrupt_delay_ms{"voice_freq_interrupt_delay_ms", 1000, 0, 1000,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Brief speech: a page of F keys said by its name only, not each key (button_bar.cpp say_page)
+    Parameter<int32_t> p_voice_brief{"voice_brief", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // What the CW decoder, RTTY, PSK, Olivia and JTTY receive, read aloud (voice_text.c)
     Parameter<int32_t> p_voice_read_text{"voice_read_text", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};

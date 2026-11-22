@@ -180,6 +180,7 @@ extern ParamInt *cfg_voice_pitch;    // p_voice_pitch, %
 extern ParamInt *cfg_voice_volume;   // p_voice_volume, %
 extern ParamInt *cfg_voice_interrupt;          // p_voice_interrupt
 extern ParamInt *cfg_voice_read_text;          // p_voice_read_text
+extern ParamInt *cfg_voice_brief;              // p_voice_brief
 extern ParamInt *cfg_voice_repeat_count;       // p_voice_repeat_count
 extern ParamInt *cfg_voice_interrupt_delay_ms;      // p_voice_interrupt_delay_ms
 extern ParamInt *cfg_voice_freq_interrupt_delay_ms; // p_voice_freq_interrupt_delay_ms

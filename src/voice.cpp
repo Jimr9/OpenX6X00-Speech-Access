@@ -272,7 +272,11 @@ void voice_change_mode() {
             voice_msg_hold(true);
             msg_update_text_fmt("Speech: when the screen is off");
             voice_msg_hold(false);
-            voice_say_text_fmt("Speech when the screen is off");
+            /* The screen off at once, so the speech starts now and not at the next blanking (Jim, 2026-11-21) */
+            if (!backlight_is_dark()) {
+                backlight_switch();
+            }
+            voice_say_text_fmt("Speech when the screen is off. Screen off");
             break;
 
         case VOICE_LCD:
@@ -280,7 +284,10 @@ void voice_change_mode() {
             voice_msg_hold(true);
             msg_update_text_fmt("Speech: always");
             voice_msg_hold(false);
-            voice_say_text_fmt("Speech always");
+            if (backlight_is_dark()) {
+                backlight_switch();     /* speech always: the screen on as well */
+            }
+            voice_say_text_fmt("Speech always. Screen on");
             break;
 
         default:
@@ -288,6 +295,9 @@ void voice_change_mode() {
             voice_msg_hold(true);
             msg_update_text_fmt("Speech: off");
             voice_msg_hold(false);
+            if (backlight_is_dark()) {
+                backlight_switch();     /* speech off: the screen is what is left */
+            }
             voice_say_text_fmt("Speech off. Hold D F N for speech again");
             break;
     }
@@ -352,6 +362,24 @@ void voice_say_prefix(const char *text) {
     lv_timer_set_repeat_count(lv_timer_create(prefix_timer_cb, 400, NULL), 1);
 }
 
+/* voice_repeat_last(): the last announcement as it was started, its prefix in it */
+static char     last_said[sizeof(buf)];
+
+void voice_repeat_last() {
+    if (!last_said[0]) {
+        voice_say_text_fmt("Nothing said yet");
+        return;
+    }
+    if (!voice_enable()) {
+        return;
+    }
+    snprintf(buf, sizeof(buf), "%s", last_said);
+    prompt_len = 0;
+    prefix[0] = '\0';
+    voice_trace("repeat: %s", buf);
+    start(0);           /* the speaking thread takes it, cutting off whatever plays */
+}
+
 static void start(uint32_t say_delay) {
     if (prefix[0]) {
         if (lv_tick_elaps(prefix_at) < 400) {
@@ -368,6 +396,7 @@ static void start(uint32_t say_delay) {
         }
         prefix[0] = '\0';
     }
+    snprintf(last_said, sizeof(last_said), "%s", buf);
     voice_trace("say (%u ms): %s", say_delay / 1000, buf);
     {
         std::lock_guard<std::mutex> lock(mux);

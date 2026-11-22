@@ -804,6 +804,14 @@ void main_screen_action(press_action_t action) {
         case ACTION_EXT_TUNE:       ext_tune_toggle(); break;   /* an external tuner's: started, or stopped */
         case ACTION_FREQ_LOCK:      say_lock(toggle_freq_lock()); break;
         case ACTION_VOICE_MODE:     voice_change_mode(); break;
+        case ACTION_VOICE_REPEAT:   voice_repeat_last(); break;
+        case ACTION_VOICE_FKEYS: {  /* what this page's F keys hold, asked for: said even with Brief speech */
+            char keys[300];
+
+            buttons_page_text(keys, sizeof(keys));
+            voice_say_text_fmt("%s", keys[0] ? keys : "No F keys on this page");
+            break;
+        }
 
         case ACTION_NR_TOGGLE:      say_state("NR", toggle_param(cfg_nr) ? "On" : "Off"); break;
         case ACTION_NB_TOGGLE:      say_state("NB", toggle_param(cfg_nb) ? "On" : "Off"); break;

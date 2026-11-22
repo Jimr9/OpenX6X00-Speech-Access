@@ -869,6 +869,8 @@ static const key_action_t front_actions[] = {
     {" Mute ", ACTION_MUTE},
     {" Frequency lock on/off ", ACTION_FREQ_LOCK},
     {" Speech mode ", ACTION_VOICE_MODE},
+    {" Repeat last speech ", ACTION_VOICE_REPEAT},
+    {" Read the F keys ", ACTION_VOICE_FKEYS},
     {" Step up ", ACTION_STEP_UP},
     {" Step down ", ACTION_STEP_DOWN},     /* FST's long press until it is changed */
     {" WF mode ", ACTION_WF_MODE},
@@ -926,6 +928,8 @@ static const key_action_t mic_actions[] = {
     {" Step down ", ACTION_STEP_DOWN},
     {" Frequency lock on/off ", ACTION_FREQ_LOCK},
     {" Speech mode ", ACTION_VOICE_MODE},
+    {" Repeat last speech ", ACTION_VOICE_REPEAT},
+    {" Read the F keys ", ACTION_VOICE_FKEYS},
     {" NR toggle ", ACTION_NR_TOGGLE},
     {" NB toggle ", ACTION_NB_TOGGLE},
     {" WF mode ", ACTION_WF_MODE},
@@ -3799,6 +3803,7 @@ static void make_voice_page() {
     row = card_begin("VOICE BEHAVIOUR");
     row = make_param_switch(row, "New speech interrupts", cfg_sm.p_voice_interrupt);
     row = make_param_switch(row, "Read decoded text", cfg_sm.p_voice_read_text);
+    row = make_param_switch(row, "Brief speech", cfg_sm.p_voice_brief);
     row = make_param_slider(row, "Interrupt delay", &voice_delay_slider);
     row = make_param_slider(row, "Tuning delay", &voice_fdelay_slider);
     row = make_param_slider(row, "Name repeats", &voice_repeat_slider);

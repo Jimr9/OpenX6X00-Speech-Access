@@ -520,25 +520,211 @@ static const char *key_name(const char *t, char *buf, size_t size) {
     }
     /* A capital said so: a password's case matters */
     if (t[1] == '\0' && t[0] >= 'A' && t[0] <= 'Z') {
-        snprintf(buf, size, "cap %c", t[0]);
+        snprintf(buf, size, "capital %c", t[0]);
         return buf;
     }
     return t;
+}
+
+/* One character of a text, at p, as said: "capital A", "space", "dot", "7"; a UTF-8 one whole */
+static const char *char_name(const char *p, char *buf, size_t size) {
+    char          one[8];
+    unsigned char c   = (unsigned char)p[0];
+    int           len = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+    const char   *n;
+
+    snprintf(one, sizeof(one), "%.*s", len, p);
+    n = key_name(one, buf, size);
+    if (n == one) {
+        snprintf(buf, size, "%s", one);     /* key_name() gave the local copy back */
+        n = buf;
+    }
+    return n;
 }
 
 static bool is_keys(lv_obj_t *obj) {
     return lv_obj_has_class(obj, &lv_btnmatrix_class);
 }
 
-/* The key the knob is on */
+/* The key the knob is on. LVGL's keyboard labels its case key with the case it changes TO ("ABC" on the small
+ * letters): said as what it is and the case typed now, so "upper case" is never heard while typing small letters */
 static const char *key_selected(lv_obj_t *obj, char *buf, size_t size) {
-    uint16_t id = lv_btnmatrix_get_selected_btn(obj);
+    uint16_t    id = lv_btnmatrix_get_selected_btn(obj);
+    const char *t;
 
     if (id == LV_BTNMATRIX_BTN_NONE) {
         return NULL;
     }
-    return key_name(lv_btnmatrix_get_btn_text(obj, id), buf, size);
+    t = lv_btnmatrix_get_btn_text(obj, id);
+#if LV_USE_KEYBOARD
+    if (t && lv_obj_check_type(obj, &lv_keyboard_class)) {
+        if (strcmp(t, "ABC") == 0) return "case key, now lower case";
+        if (strcmp(t, "abc") == 0)
+            return lv_keyboard_get_mode(obj) == LV_KEYBOARD_MODE_SPECIAL ? "letters key" : "case key, now upper case";
+        if (strcmp(t, "1#") == 0) return "numbers and symbols key";
+    }
+#endif
+    return key_name(t, buf, size);
 }
+
+/* ---- Text fields: the character at the cursor, and what was typed or deleted ---- */
+
+/* Left, Right, Home, End: the character the cursor is now on, "beginning, K" at the start, "end" after the last */
+static void say_cursor(lv_obj_t *ta) {
+    const char *t   = lv_textarea_get_text(ta);
+    uint32_t    pos = lv_textarea_get_cursor_pos(ta);
+    uint32_t    len = t ? _lv_txt_get_encoded_length(t) : 0;
+    char        name[32];
+    const char *n;
+
+    if (!len) {
+        voice_say_text_fmt("empty");
+        return;
+    }
+    if (pos >= len) {
+        voice_say_text_fmt("end");
+        return;
+    }
+    n = lv_textarea_get_password_mode(ta) ? "star" : char_name(t + _lv_txt_encoded_get_byte_id(t, pos), name, sizeof(name));
+    if (pos == 0)
+        voice_say_text_fmt("beginning, %s", n);
+    else
+        voice_say_text_fmt("%s", n);
+}
+
+void voice_focus_say_cursor(lv_obj_t *ta) {
+    if (ta && voice_auto_active()) say_cursor(ta);
+}
+
+void voice_focus_say_delete(lv_obj_t *ta, bool forward) {
+    const char *t;
+    uint32_t    pos, len;
+    char        name[32];
+
+    if (!ta || !voice_auto_active()) return;
+    t   = lv_textarea_get_text(ta);
+    pos = lv_textarea_get_cursor_pos(ta);
+    len = t ? _lv_txt_get_encoded_length(t) : 0;
+    if (forward ? pos >= len : pos == 0) {
+        voice_say_text_fmt("nothing to delete");
+    } else if (lv_textarea_get_password_mode(ta)) {
+        voice_say_text_fmt("deleted");
+    } else {
+        voice_say_text_fmt("deleted %s",
+                           char_name(t + _lv_txt_encoded_get_byte_id(t, forward ? pos : pos - 1), name, sizeof(name)));
+    }
+}
+
+static lv_obj_t *ta_obj;            /* the text field last heard, and its text then */
+static char      ta_text[256];
+
+static void ta_remember(lv_obj_t *ta) {
+    const char *t = lv_textarea_get_text(ta);
+
+    ta_obj = ta;
+    snprintf(ta_text, sizeof(ta_text), "%s", t ? t : "");
+}
+
+/* A few characters typed or deleted: those said ("K", "deleted space"), true. Anything else: false, the field is
+ * read whole by the caller */
+static bool ta_say_change(lv_obj_t *ta) {
+    const char *now = lv_textarea_get_text(ta);
+    size_t      a = strlen(ta_text), b = now ? strlen(now) : 0, i = 0;
+    bool        hidden = lv_textarea_get_password_mode(ta);
+    char        name[32];
+
+    if (ta != ta_obj || !now || b >= sizeof(ta_text) - 1) {
+        return false;
+    }
+    while (i < a && i < b && now[i] == ta_text[i]) i++;
+    if (b > a && b - a <= 4 && strcmp(now + i + (b - a), ta_text + i) == 0) {
+        voice_say_text_fmt("%s", hidden ? "star" : char_name(now + i, name, sizeof(name)));
+        return true;
+    }
+    if (a > b && a - b <= 4 && strcmp(ta_text + i + (a - b), now + i) == 0) {
+        if (hidden)
+            voice_say_text_fmt("deleted");
+        else
+            voice_say_text_fmt("deleted %s", char_name(ta_text + i, name, sizeof(name)));
+        return true;
+    }
+    return false;
+}
+
+#if LV_USE_KEYBOARD
+/* The on-screen keyboard: the key pressed and what Backspace takes, read before LVGL's keyboard acts on it (its
+ * page change puts another key under the same place) */
+static char kbd_pressed[16];
+static char kbd_deleted[48];
+
+static void kbd_pre_cb(lv_event_t *e) {
+    lv_obj_t   *kb = lv_event_get_target(e);
+    uint16_t    id = lv_btnmatrix_get_selected_btn(kb);
+    const char *t  = id != LV_BTNMATRIX_BTN_NONE ? lv_btnmatrix_get_btn_text(kb, id) : NULL;
+    lv_obj_t   *ta = lv_keyboard_get_textarea(kb);
+
+    snprintf(kbd_pressed, sizeof(kbd_pressed), "%s", t ? t : "");
+    kbd_deleted[0] = '\0';
+    if (t && strcmp(t, LV_SYMBOL_BACKSPACE) == 0 && ta) {
+        const char *s   = lv_textarea_get_text(ta);
+        uint32_t    pos = lv_textarea_get_cursor_pos(ta);
+        char        name[32];
+
+        if (!s || pos == 0)
+            snprintf(kbd_deleted, sizeof(kbd_deleted), "nothing to delete");
+        else if (lv_textarea_get_password_mode(ta))
+            snprintf(kbd_deleted, sizeof(kbd_deleted), "deleted");
+        else
+            snprintf(kbd_deleted, sizeof(kbd_deleted), "deleted %s",
+                     char_name(s + _lv_txt_encoded_get_byte_id(s, pos - 1), name, sizeof(name)));
+    }
+}
+
+/* The knob back on the key with this text, on the page now shown */
+static void kbd_select(lv_obj_t *kb, const char *text) {
+    uint16_t n = ((lv_btnmatrix_t *)kb)->btn_cnt;
+
+    for (uint16_t i = 0; i < n; i++) {
+        const char *t = lv_btnmatrix_get_btn_text(kb, i);
+
+        if (t && strcmp(t, text) == 0) {
+            lv_btnmatrix_set_selected_btn(kb, i);
+            return;
+        }
+    }
+}
+
+/* A key pressed: the case or page it changed to, the knob kept on that key; what Backspace deleted; the character
+ * the cursor moved onto. True when said here */
+static bool kbd_pressed_say(lv_obj_t *kb) {
+    const char *was = kbd_pressed;
+    lv_obj_t   *ta  = lv_keyboard_get_textarea(kb);
+    bool        said = true;
+
+    if (!was[0]) {
+        return false;
+    }
+    if (strcmp(was, "ABC") == 0) {
+        kbd_select(kb, "abc");
+        voice_say_text_fmt("Upper case");
+    } else if (strcmp(was, "abc") == 0) {
+        kbd_select(kb, "ABC");
+        voice_say_text_fmt("Lower case");
+    } else if (strcmp(was, "1#") == 0) {
+        kbd_select(kb, "abc");
+        voice_say_text_fmt("Numbers and symbols");
+    } else if (kbd_deleted[0]) {
+        voice_say_text_fmt("%s", kbd_deleted);
+    } else if (ta && (strcmp(was, LV_SYMBOL_LEFT) == 0 || strcmp(was, LV_SYMBOL_RIGHT) == 0)) {
+        say_cursor(ta);
+    } else {
+        said = false;
+    }
+    kbd_pressed[0] = '\0';
+    kbd_deleted[0] = '\0';
+    return said;
+}
+#endif
 
 /* The value of a control as it reads now; false for an object without one */
 static bool value_text(lv_obj_t *obj, char *buf, size_t size) {
@@ -843,9 +1029,33 @@ static void value_cb(lv_event_t *e) {
                 }
             }
         } else if (code == LV_EVENT_VALUE_CHANGED) {
+#if LV_USE_KEYBOARD
+            if (lv_obj_check_type(obj, &lv_keyboard_class) && kbd_pressed_say(obj)) {
+                return;
+            }
+#endif
             k = key_selected(obj, key, sizeof(key));
             if (k) {
                 voice_say_text_fmt("%s", k);
+            }
+        }
+        return;
+    }
+    /* A text field: the arrows say the character the cursor lands on; typing says what was typed or deleted */
+    if (lv_obj_check_type(obj, &lv_textarea_class)) {
+        lv_event_code_t code = lv_event_get_code(e);
+
+        if (code == LV_EVENT_VALUE_CHANGED) {
+            if (!(voice_auto_active() && ta_say_change(obj))) {
+                say_value(obj);
+            }
+            ta_remember(obj);
+        } else if (code == LV_EVENT_KEY && voice_auto_active()) {
+            uint32_t key = lv_event_get_key(e);
+
+            if (key == LV_KEY_LEFT || key == LV_KEY_RIGHT || key == LV_KEY_HOME || key == LV_KEY_END ||
+                ((key == LV_KEY_UP || key == LV_KEY_DOWN) && !lv_textarea_get_one_line(obj))) {
+                say_cursor(obj);
             }
         }
         return;
@@ -892,6 +1102,15 @@ static void dropdown_esc_cb(lv_event_t *e) {
 static void watch_value(lv_obj_t *obj) {
     lv_obj_remove_event_cb(obj, value_cb);
     lv_obj_add_event_cb(obj, value_cb, LV_EVENT_ALL, NULL);
+    if (lv_obj_check_type(obj, &lv_textarea_class)) {
+        ta_remember(obj);   /* what typing changes is told from this */
+    }
+#if LV_USE_KEYBOARD
+    if (lv_obj_check_type(obj, &lv_keyboard_class)) {
+        lv_obj_remove_event_cb(obj, kbd_pre_cb);
+        lv_obj_add_event_cb(obj, kbd_pre_cb, (lv_event_code_t)(LV_EVENT_VALUE_CHANGED | LV_EVENT_PREPROCESS), NULL);
+    }
+#endif
     if (lv_obj_check_type(obj, &lv_dropdown_class)) {
         lv_obj_remove_event_cb(obj, dropdown_esc_cb);
         lv_obj_add_event_cb(obj, dropdown_esc_cb, (lv_event_code_t)(LV_EVENT_KEY | LV_EVENT_PREPROCESS), NULL);

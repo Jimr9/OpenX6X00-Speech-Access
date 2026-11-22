@@ -114,6 +114,9 @@ buttons_page_t *buttons_get_cur_page();
 /* The F-keys of the page loaded, as said: "F1 Run, F2 Scale, Log, F3 Span, 200 kHz"; "" with none */
 void            buttons_page_text(char *out, size_t size);
 
+/* The next page loaded said nothing (a window that says its own result as it closes); false takes it back */
+void            buttons_page_quiet(bool on);
+
 #ifdef __cplusplus
 }
 #endif

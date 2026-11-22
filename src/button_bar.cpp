@@ -18,6 +18,7 @@
 #include "tx_player.h"
 #include "knob_info.h"
 #include "cfg/settings_manager.h"
+#include "cfg/cfg_api.h"
 #include "cfg/encoder_defaults.h"
 
 #include <algorithm>
@@ -796,10 +797,27 @@ void buttons_page_text(char *out, size_t size) {
     }
 }
 
+/* buttons_page_quiet(): the next page loaded is not said (a window that says its own result as it closes) */
+static bool page_quiet;
+
+void buttons_page_quiet(bool on) {
+    page_quiet = on;
+}
+
 /* A page loaded: "(SETTINGS\n1:3)" on its first button is said "SETTINGS page 1" */
 static void say_page(buttons_page_t *page) {
     button_data_t *first = page->items[0];
+    /* Settings > Voice > Brief speech: the page by its name, its keys only when asked (Read the F keys) */
+    bool           brief = param_i_get(cfg_voice_brief);
 
+    if (page_quiet) {
+        page_quiet = false;
+        return;
+    }
+    if (page == &page_dfl && voice_auto_active() && brief) {
+        voice_say_clean("Filter page", true);
+        return;
+    }
     if (page == &page_dfl && voice_auto_active()) {    /* DFL's one page has no page button to name it */
         char s2[300];
         size_t n2 = (size_t)snprintf(s2, sizeof(s2), "Filter page");
@@ -818,6 +836,10 @@ static void say_page(buttons_page_t *page) {
     }
     if (voice_auto_active() && (!first || first->type != BTN_TEXT || !first->label || first->label[0] != '(')) {
         char keys[300];
+
+        if (brief) {
+            return;     /* a window's own keys: Read the F keys says them */
+        }
 
         cur_page = page;    /* buttons_page_text() reads the one loaded */
         buttons_page_text(keys, sizeof(keys));
@@ -846,8 +868,8 @@ static void say_page(buttons_page_t *page) {
 
         snprintf(s2, sizeof(s2), "%s page %d", name, num);
         n2 = strlen(s2);
-        /* What F2 to F5 hold: "VOL page 1. F2 Volume, 25, F3 Squelch, 0, ..." */
-        for (int i = 1; i < 5 && n2 + 8 < sizeof(s2); i++) {
+        /* What F2 to F5 hold: "VOL page 1. F2 Volume, 25, F3 Squelch, 0, ..."; Brief: the name alone */
+        for (int i = 1; !brief && i < 5 && n2 + 8 < sizeof(s2); i++) {
             button_data_t *d = page->items[i];
 
             if (!d) continue;

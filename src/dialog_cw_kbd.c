@@ -9,6 +9,7 @@
 
 #include "dialog_cw_kbd.h"
 #include "voice.h"
+#include "voice_focus.h"
 
 #include "buttons.h"
 #include "cfg/cfg_api.h"
@@ -402,8 +403,8 @@ static void key_cb(lv_event_t *e) {
             break;
         case LV_KEY_BACKSPACE:
             if (*lv_textarea_get_text(input)) {
+                voice_focus_say_delete(input, false);   /* "deleted K", read before it goes */
                 lv_textarea_del_char(input);
-                voice_say_text_fmt("deleted");
             } else if (param_i_get(cfg_cw_live) && queue[0]) {   /* Live: the last letter not keyed yet */
                 unqueue_last();
                 update_view();

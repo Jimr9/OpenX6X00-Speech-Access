@@ -2650,12 +2650,12 @@ static void compose_key(uint32_t key) {
             }
             break;
         case LV_KEY_BACKSPACE:
+            voice_focus_say_delete(ta, false);      /* "deleted K": read before it goes */
             lv_textarea_del_char(ta);
-            if (voice_auto_active()) voice_say_text_fmt("deleted");
             break;
         case LV_KEY_DEL:
+            voice_focus_say_delete(ta, true);
             lv_textarea_del_char_forward(ta);
-            if (voice_auto_active()) voice_say_text_fmt("deleted");
             break;
         case LV_KEY_LEFT:
         case LV_KEY_RIGHT:
@@ -2663,13 +2663,16 @@ static void compose_key(uint32_t key) {
                 field_move(key == LV_KEY_RIGHT ? 1 : -1);
             } else if (key == LV_KEY_LEFT) {
                 lv_textarea_cursor_left(ta);
+                voice_focus_say_cursor(ta);
             } else {
                 lv_textarea_cursor_right(ta);
+                voice_focus_say_cursor(ta);
             }
             break;
         case LV_KEY_UP:
             if (field_i == FIELDS - 1 && lv_textarea_get_cursor_pos(ta) > 0) {
                 lv_textarea_cursor_up(ta);
+                voice_focus_say_cursor(ta);
             } else {
                 field_move(-1);
             }
@@ -2677,15 +2680,18 @@ static void compose_key(uint32_t key) {
         case LV_KEY_DOWN:
             if (field_i == FIELDS - 1) {
                 lv_textarea_cursor_down(ta);
+                voice_focus_say_cursor(ta);
             } else {
                 field_move(1);
             }
             break;
         case LV_KEY_HOME:
             lv_textarea_set_cursor_pos(ta, 0);
+            voice_focus_say_cursor(ta);
             break;
         case LV_KEY_END:
             lv_textarea_set_cursor_pos(ta, LV_TEXTAREA_CURSOR_LAST);
+            voice_focus_say_cursor(ta);
             break;
         default:
             /* a character: ASCII, or a letter beyond it in UTF-8 as the keyboard's layout gives it (kbd_layout.c:
