@@ -147,6 +147,14 @@ static void tabs_hint(const char *head, buttons_page_t *pg, int num) {
     char   s[300];
     size_t n = (size_t)snprintf(s, sizeof(s), "%s, page %d of 3:", head, num);
 
+    /* Brief speech: the page and the tab that opens, the keys only when asked (KEY held, Read the F keys) */
+    if (param_i_get(cfg_voice_brief)) {
+        n = (size_t)snprintf(s, sizeof(s), "%s, page %d of 3", head, num);
+        if (pg->items[1] && pg->items[1]->label) snprintf(s + n, sizeof(s) - n, ". %s tab", pg->items[1]->label);
+        voice_focus_hint(s);
+        tabs_said = true;
+        return;
+    }
     for (int i = 1; i < 5 && n + 8 < sizeof(s); i++) {
         if (pg->items[i] && pg->items[i]->label) {
             n += snprintf(s + n, sizeof(s) - n, "%s F%d %s", i == 1 ? "" : ",", i + 1, pg->items[i]->label);

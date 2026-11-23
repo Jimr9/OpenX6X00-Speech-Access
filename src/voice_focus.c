@@ -1182,6 +1182,34 @@ void voice_focus_hint_add(const char *text) {
     snprintf(hint + n, sizeof(hint) - n, ". %s", text);
 }
 
+/* The focused control is described FOCUS_SETTLE_MS after the focus moved, not at once: a page being built
+ * focuses its first control the moment it is made, before its row's name, its options ("Option 1", LVGL's
+ * placeholder) and its value are set, and the value then set was said again without a name. A knob turned fast
+ * also says only the control it stops on */
+#define FOCUS_SETTLE_MS 50
+
+static lv_timer_t *settle_timer;
+static lv_obj_t   *settle_obj;
+static bool        settle_none;     /* the focus went to nothing: the hint alone */
+
+static void focus_say(lv_obj_t *obj);
+
+static void settle_cb(lv_timer_t *t) {
+    (void)t;
+    settle_timer = NULL;        /* a repeat count of 1: LVGL deletes it after this */
+    if (!voice_auto_active()) {
+        hint_clear();
+        return;
+    }
+    if (settle_none) {
+        focus_say(NULL);
+    } else if (settle_obj && lv_obj_is_valid(settle_obj)) {
+        focus_say(settle_obj);
+    } else {
+        hint_clear();           /* gone in the meantime (a window closed at once) */
+    }
+}
+
 void voice_focus_cb(lv_group_t *group) {
     if (!voice_auto_active()) {
         hint_clear();
@@ -1189,11 +1217,31 @@ void voice_focus_cb(lv_group_t *group) {
     }
 
     lv_obj_t *obj = lv_group_get_focused(group);
-    char      buf[256];
-    char      text[1060];
 
     voice_trace("focus %p class %p quiet %i", (void *)obj, obj ? (const void *)lv_obj_get_class(obj) : NULL,
                 obj ? lv_obj_has_flag(obj, VOICE_FOCUS_QUIET) : 0);
+    if (obj && lv_obj_has_flag(obj, VOICE_FOCUS_QUIET)) {
+        if (settle_timer) {     /* what was waiting is not said over the window's own speech */
+            lv_timer_del(settle_timer);
+            settle_timer = NULL;
+        }
+        focus_say(obj);         /* a window that speaks its items itself: its name at once, as before */
+        return;
+    }
+    settle_obj  = obj;
+    settle_none = obj == NULL;
+    if (settle_timer) {
+        lv_timer_reset(settle_timer);
+    } else {
+        settle_timer = lv_timer_create(settle_cb, FOCUS_SETTLE_MS, NULL);
+        lv_timer_set_repeat_count(settle_timer, 1);
+    }
+}
+
+static void focus_say(lv_obj_t *obj) {
+    char buf[256];
+    char text[1060];
+
     if (obj && lv_obj_has_flag(obj, VOICE_FOCUS_QUIET)) {
         /* The window speaks its items itself; its name, if one came, still said (a window that says its own
          * name at once cuts this off) */
