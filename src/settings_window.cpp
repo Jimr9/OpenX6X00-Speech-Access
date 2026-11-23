@@ -6205,7 +6205,8 @@ static void construct_cb(lv_obj_t *parent) {
         btn_pages[i]->items[0]->next = btn_pages[(i + 1) % 3];
     }
     rail_create();
-    tabs_hint("Settings. Tabs on the F-keys", &btn_page, 1);
+    /* Brief speech: "Settings, page 1 of 3", as F1 says the pages; the knob reads on from the first row */
+    tabs_hint(param_i_get(cfg_voice_brief) ? "Settings" : "Settings. Tabs on the F-keys", &btn_page, 1, true);
     tab_press(&btn_general);
     lv_group_set_focus_cb(keyboard_group, focus_cb);
 }
