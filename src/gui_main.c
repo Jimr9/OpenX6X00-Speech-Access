@@ -525,6 +525,11 @@ int main(void) {
     /* Spoken feedback (voice.cpp): no window of this GUI announces itself, so the helper that reads focus
      * changes, messages and F-key presses is on everywhere (it says nothing with speech Off, and nothing on the air) */
     voice_auto_set(true);
+    /* Speech when the screen is off: the screen off from the start, or the start and all after it said nothing
+     * until the screen went dark by itself */
+    if (voice_is_on() && param_i_get(cfg_voice_mode) == VOICE_LCD && !backlight_is_dark()) {
+        backlight_switch();
+    }
     voice_say_text_fmt("Open X 6 X hundred, ready");    /* with speech on: the radio is up */
     gui_loop();
     return 0;
