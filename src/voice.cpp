@@ -92,17 +92,29 @@ static int voice_index() {
     return (n >= 0 && n < VOICES_NUM) ? n : 0;
 }
 
-/* Test builds: every request, refusal and start written to /tmp/voice.log (RAM, gone at power off) */
+/* Test builds: every request, refusal and start written to /tmp/voice.log (RAM, gone at power off). The speech
+ * fork's builds have it on unless /mnt/voice-trace-off is there; at 1 MB the log becomes voice.log.1 and starts
+ * again, so a long day never fills the RAM */
+#define VOICE_TRACE_MAX (1024 * 1024)
+
 void voice_trace(const char *fmt, ...) {
-    static FILE *f;
-    static int   enabled = -1;
-    va_list      args;
+    static FILE       *f;
+    static int         enabled = -1;
+    static std::mutex &trace_mux = *new std::mutex;    /* the GUI thread and the speaking thread both write */
+    va_list            args;
+
+    std::lock_guard<std::mutex> lock(trace_mux);
 
     if (enabled < 0) {
-        enabled = access("/mnt/voice-trace", F_OK) == 0;
+        enabled = access("/mnt/voice-trace-off", F_OK) != 0;
     }
     if (!enabled) {
         return;
+    }
+    if (f && ftell(f) > VOICE_TRACE_MAX) {
+        fclose(f);
+        f = NULL;
+        rename("/tmp/voice.log", "/tmp/voice.log.1");
     }
     if (!f) {
         f = fopen("/tmp/voice.log", "a");
