@@ -1121,6 +1121,7 @@ static void watch_value(lv_obj_t *obj) {
 
 static char        hint[800];
 static lv_timer_t *hint_timer;
+static lv_timer_t *settle_timer;    /* a focus waiting to be said (below): it takes the hint with it */
 
 static void hint_clear(void) {
     hint[0] = '\0';
@@ -1145,7 +1146,7 @@ void voice_focus_hint(const char *text) {
         return;
     }
     snprintf(hint, sizeof(hint), "%s", text);
-    if (!hint_timer) {
+    if (!hint_timer && !settle_timer) {
         hint_timer = lv_timer_create(hint_timer_cb, 0, NULL);
         lv_timer_set_repeat_count(hint_timer, 1);
     }
@@ -1188,7 +1189,6 @@ void voice_focus_hint_add(const char *text) {
  * also says only the control it stops on */
 #define FOCUS_SETTLE_MS 50
 
-static lv_timer_t *settle_timer;
 static lv_obj_t   *settle_obj;
 static bool        settle_none;     /* the focus went to nothing: the hint alone */
 
@@ -1206,7 +1206,7 @@ static void settle_cb(lv_timer_t *t) {
     } else if (settle_obj && lv_obj_is_valid(settle_obj)) {
         focus_say(settle_obj);
     } else {
-        hint_clear();           /* gone in the meantime (a window closed at once) */
+        focus_say(NULL);        /* gone in the meantime (a window closed at once): the hint alone, if any */
     }
 }
 
@@ -1230,6 +1230,10 @@ void voice_focus_cb(lv_group_t *group) {
     }
     settle_obj  = obj;
     settle_none = obj == NULL;
+    if (hint_timer) {           /* the hint waits for this focus and goes with it, not alone before it */
+        lv_timer_del(hint_timer);
+        hint_timer = NULL;
+    }
     if (settle_timer) {
         lv_timer_reset(settle_timer);
     } else {
