@@ -1202,11 +1202,14 @@ static void front_key_cb(lv_event_t *e) {
             ab_key(tap, hold);
             break;
 
-        case KEYPAD_POWER:  /* a press: the screen off/on; with speech always on, the screen read aloud instead */
+        case KEYPAD_POWER:  /* a press: the screen off/on; with speech speaking, the screen read aloud instead */
             if (tap) {
-                /* Speech always: the screen read aloud, a blind operator has no use for the screen off/on. Off, and
-                 * speech only while the screen is dark: the screen off/on as ever */
-                if (voice_is_on() && param_i_get(cfg_voice_mode) == VOICE_ALWAYS) {
+                /* Speech always: the screen read aloud, a blind operator has no use for the screen off/on. Speech
+                 * only while the screen is dark, and dark: read aloud too, the screen kept dark (a tap that lit it
+                 * would silence the speech; DFN held to Always brings the screen back). Off: the screen off/on */
+                int mode = param_i_get(cfg_voice_mode);
+
+                if (voice_is_on() && (mode == VOICE_ALWAYS || (mode == VOICE_LCD && backlight_is_dark()))) {
                     say_screen();
                 } else {
                     backlight_switch();
