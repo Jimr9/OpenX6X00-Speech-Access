@@ -143,15 +143,20 @@ static void key_cb(lv_event_t *e);
 static bool tabs_said;      /* a hint naming the tabs is on its way: tab_press() leaves it */
 
 /* "Settings tabs, page 2: F2 Bluetooth, F3 Keys, F4 Cluster, F5 TX Cal. F1 more tabs" */
-static void tabs_hint(const char *head, buttons_page_t *pg, int num) {
+static void tabs_hint(const char *head, buttons_page_t *pg, int num, bool page_only = false) {
     char   s[300];
     size_t n = (size_t)snprintf(s, sizeof(s), "%s, page %d of 3:", head, num);
 
-    /* Brief speech: the page and the tab that opens, the keys only when asked (KEY held, Read the F keys) */
+    /* Brief speech: the page and the tab that opens, the keys only when asked (KEY held, Read the F keys).
+     * F1 (page_only): the page alone, the knob reads on from the row the tab focuses */
     if (param_i_get(cfg_voice_brief)) {
         n = (size_t)snprintf(s, sizeof(s), "%s, page %d of 3", head, num);
-        if (pg->items[1] && pg->items[1]->label) snprintf(s + n, sizeof(s) - n, ". %s tab", pg->items[1]->label);
-        voice_focus_hint(s);
+        if (page_only) {
+            voice_focus_hint_alone(s);
+        } else {
+            if (pg->items[1] && pg->items[1]->label) snprintf(s + n, sizeof(s) - n, ". %s tab", pg->items[1]->label);
+            voice_focus_hint(s);
+        }
         tabs_said = true;
         return;
     }
@@ -174,7 +179,7 @@ static void page_press(button_data_t *btn) {
     if (btn->next && btn->next->items[1]) {
         int num = btn->next->items[0] && btn->next->items[0]->label ? btn->next->items[0]->label[10] - '0' : 0;
 
-        tabs_hint("Settings tabs", btn->next, num);
+        tabs_hint("Settings tabs", btn->next, num, true);
         tab_press(btn->next->items[1]);
     }
 }

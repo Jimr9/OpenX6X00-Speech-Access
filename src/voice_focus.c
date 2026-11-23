@@ -1123,8 +1123,11 @@ static char        hint[800];
 static lv_timer_t *hint_timer;
 static lv_timer_t *settle_timer;    /* a focus waiting to be said (below): it takes the hint with it */
 
+static bool hint_alone;     /* voice_focus_hint_alone(): the focus that comes is not described */
+
 static void hint_clear(void) {
-    hint[0] = '\0';
+    hint[0]    = '\0';
+    hint_alone = false;
     if (hint_timer) {
         lv_timer_del(hint_timer);
         hint_timer = NULL;
@@ -1138,7 +1141,15 @@ static void hint_timer_cb(lv_timer_t *t) {
     if (hint[0] && voice_auto_active()) {
         voice_say_clean(hint, false);
     }
-    hint[0] = '\0';
+    hint[0]    = '\0';
+    hint_alone = false;
+}
+
+void voice_focus_hint_alone(const char *text) {
+    voice_focus_hint(text);
+    if (hint[0]) {
+        hint_alone = true;
+    }
 }
 
 void voice_focus_hint(const char *text) {
@@ -1258,7 +1269,7 @@ static void focus_say(lv_obj_t *obj) {
         }
         return;
     }
-    if (!obj || !voice_focus_describe(obj, buf, sizeof(buf))) {
+    if (!obj || hint_alone || !voice_focus_describe(obj, buf, sizeof(buf))) {
         buf[0] = '\0';
     }
     if (obj) {

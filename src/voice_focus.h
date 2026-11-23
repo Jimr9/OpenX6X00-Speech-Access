@@ -28,6 +28,10 @@ bool voice_focus_describe(lv_obj_t *obj, char *buf, size_t size);
  * focus change that usually comes with it ("<hint>. <focused item>"), or alone if none comes */
 void voice_focus_hint(const char *text);
 
+/* The same, said alone: the focus change that comes with it is not described (Settings' F1: "page 2 of 3", the
+ * knob then reads from the focused row) */
+void voice_focus_hint_alone(const char *text);
+
 /* The same, added after a hint already waiting ("SWR Scan" then "F1 Run, F2 Scale, F3 Span"), else on its own */
 void voice_focus_hint_add(const char *text);
 
