@@ -11,6 +11,7 @@
 #include "board.h"
 #include "voice.h"
 #include "voice_focus.h"
+#include "bootmenu.h"
 
 #include "dsp.h"
 #include "wifi.h"
@@ -3765,6 +3766,139 @@ static param_slider_t voice_repeat_slider = {&cfg_sm.p_voice_repeat_count, 0, 20
 static param_slider_t voice_delay_slider  = {&cfg_sm.p_voice_interrupt_delay_ms, 0, 1000, 50, "%i ms"};
 static param_slider_t voice_fdelay_slider = {&cfg_sm.p_voice_freq_interrupt_delay_ms, 0, 1000, 50, "%i ms"};
 
+/* The multi-boot card (bootmenu.h): which system starts, how long the menus wait, a one-time start of another */
+static bootmenu_t bm;
+static int        bm_keys[BOOTMENU_MAX];     /* the dropdowns' items: the systems' keys, the talking menu left out */
+static int        bm_keys_n;
+static const int  bm_waits[] = {0, 10, 20, 30, 60};
+static const int  bm_secs[]  = {0, 1, 2, 3, 5, 10, 15};
+
+static void bm_saved(bool ok, const char *what) {
+    voice_sure();
+    if (!ok) voice_say_text_fmt("Could not write the boot card");
+    else if (what) voice_say_text_fmt("%s", what);
+}
+
+static void bm_start_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+    int key = sel == 0 ? bm.talk : bm.talk_default;
+
+    bm.screen_default = key;
+    bm_saved(bootmenu_set_screen(key, -1), sel == 0 ? "Saved, the talking menu starts" : "Saved, the default build starts");
+}
+
+static void bm_default_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+    int key = sel < bm_keys_n ? bm_keys[sel] : 1;
+    bool ok;
+
+    bm.talk_default = key;
+    ok = bootmenu_set_talk(key, -1);
+    if (bm.screen_default != bm.talk || !bm.talk) {
+        bm.screen_default = key;
+        ok = bootmenu_set_screen(key, -1) && ok;
+    }
+    bm_saved(ok, "Saved");
+}
+
+static void bm_wait_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+
+    bm.talk_wait = bm_waits[sel];
+    bm_saved(bootmenu_set_talk(-1, bm.talk_wait), "Saved");
+}
+
+static void bm_secs_cb(lv_event_t *e) {
+    int sel = lv_dropdown_get_selected(lv_event_get_target(e));
+
+    bm.screen_secs = bm_secs[sel];
+    bm_saved(bootmenu_set_screen(-1, bm.screen_secs), "Saved");
+}
+
+static void bm_restart_timer(lv_timer_t *t) {
+    int key = (int)(intptr_t)t->user_data;
+
+    if (!bootmenu_restart_into(key)) {
+        bm_saved(false, NULL);
+        return;
+    }
+    radio_poweroff();      /* a restart from Linux never comes back on the X6100: off, and POWER starts the marked one */
+}
+
+static void bm_restart_cb(lv_event_t *e) {
+    lv_obj_t *dd  = lv_event_get_target(e);
+    int       sel = lv_dropdown_get_selected(dd);
+    int       key;
+
+    if (sel == 0 || sel > bm_keys_n) return;
+    key = bm_keys[sel - 1];
+    voice_sure();
+    voice_say_text_fmt("F%i, %s, once. The radio switches off: press the power button to start it. "
+                       "The default stays as it is", key, bm.name[key - 1]);
+    msg_update_text_fmt("Next start: F%i %s. Switching off: press POWER", key, bm.name[key - 1]);
+    lv_timer_set_repeat_count(lv_timer_create(bm_restart_timer, 5000, (void *)(intptr_t)key), 1);
+}
+
+static int bm_index(const int *list, int n, int v) {
+    int best = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (list[i] <= v) best = i;
+    }
+    return best;
+}
+
+static void make_startup_card() {
+    static char systems[BOOTMENU_MAX * 48], restart[BOOTMENU_MAX * 48 + 32], title[40];
+    int         def_sel = 0;
+    uint8_t     row;
+
+    if (!bootmenu_read(&bm)) return;
+    systems[0] = '\0';
+    bm_keys_n  = 0;
+    for (int k = 1; k <= bm.n; k++) {
+        char item[48];
+
+        if (k == bm.talk || !bm.name[k - 1][0]) continue;
+        snprintf(item, sizeof(item), "F%i %s", k, bm.name[k - 1]);
+        if (bm_keys_n) strcat(systems, "\n");
+        strcat(systems, item);
+        if (k == bm.talk_default) def_sel = bm_keys_n;
+        bm_keys[bm_keys_n++] = k;
+    }
+    if (!bm_keys_n) return;
+    snprintf(restart, sizeof(restart), "Choose one\n%s", systems);
+
+    if (bm.self)
+        snprintf(title, sizeof(title), "START-UP (THIS BUILD IS F%i)", bm.self);
+    else
+        snprintf(title, sizeof(title), "START-UP");
+    row = card_begin(title);
+    if (bm.talk) {
+        wl_row_label(row, "At power-on");
+        row_choice(row, 1, 3, SMALL_3, "Talking menu\nThe default build", bm.screen_default == bm.talk ? 0 : 1,
+                   bm_start_cb, NULL);
+        row++;
+    }
+    wl_row_label(row, "Default build");
+    row_choice(row, 1, 3, SMALL_3, systems, def_sel, bm_default_cb, NULL);
+    row++;
+    if (bm.talk) {
+        wl_row_label(row, "Talking menu waits");
+        row_choice(row, 1, 3, SMALL_3, "For a key\n10 seconds\n20 seconds\n30 seconds\n60 seconds",
+                   bm_index(bm_waits, 5, bm.talk_wait), bm_wait_cb, NULL);
+        row++;
+    }
+    wl_row_label(row, "Screen menu waits");
+    row_choice(row, 1, 3, SMALL_3, "0 seconds\n1 second\n2 seconds\n3 seconds\n5 seconds\n10 seconds\n15 seconds",
+               bm_index(bm_secs, 7, bm.screen_secs), bm_secs_cb, NULL);
+    row++;
+    wl_row_label(row, "Restart into, once");
+    row_choice(row, 1, 3, SMALL_3, restart, 0, bm_restart_cb, NULL);
+    row++;
+    card_end(row);
+}
+
 static void make_voice_page() {
     static char voices[VOICES_NUM * 24];
 
@@ -3808,6 +3942,7 @@ static void make_voice_page() {
     row = make_param_slider(row, "Tuning delay", &voice_fdelay_slider);
     row = make_param_slider(row, "Name repeats", &voice_repeat_slider);
     card_end(row);
+    make_startup_card();
 }
 
 /* USB paddle (paddle_keyer.c): what is plugged in, the codes of each source, Learn, Swap.
@@ -6003,7 +6138,7 @@ static void make_info_page() {
     row = card_begin("FIRMWARE");
     row = info_row(row, "Version", strrchr(VERSION, ' ') + 1);
     row = info_row(row, "Project", "OpenX6X00 by RF.Guru");
-    row = info_row(row, "Source", "github.com/Guru-RF/OpenX6X00");
+    row = info_row(row, "Source", "github.com/Jimr9/OpenX6X00-Speech-Access, based on github.com/Guru-RF/OpenX6X00");
     row = info_row(row, "Baseband", radio_base_ver_str());
     if (radio_caps() & HW_CAP_TEST_BASE) {
         row = info_row(row, "", TEST_BASE_NOTE);

@@ -85,7 +85,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     control_owner.c
     winlink.c
     i18n.cpp
-    voice.cpp voice_focus.c voice_text.c speech_engine.c
+    voice.cpp voice_focus.c voice_text.c speech_engine.c bootmenu.c
     winlink_mail.c
 )
 
