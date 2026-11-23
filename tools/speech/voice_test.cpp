@@ -76,6 +76,7 @@ void msg_update_text_fmt(const char *fmt, ...) {
 radio_state_t     radio_get_state(void) { return radio_state; }
 bool              recorder_is_on(void) { return recording; }
 bool              backlight_is_dark(void) { return dark; }
+void              backlight_switch(void) { dark = !dark; }
 msg_voice_state_t dialog_msg_voice_get_state(void) { return MSG_VOICE_OFF; }
 
 /* ---- */

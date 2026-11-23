@@ -61,6 +61,7 @@ typedef enum { MSG_VOICE_OFF, MSG_VOICE_RECORD, MSG_VOICE_PLAY } msg_voice_state
 
 bool              recorder_is_on(void);
 bool              backlight_is_dark(void);
+void              backlight_switch(void);
 msg_voice_state_t dialog_msg_voice_get_state(void);
 
 #ifdef __cplusplus
