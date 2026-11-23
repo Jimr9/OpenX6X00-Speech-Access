@@ -477,10 +477,9 @@ static void say_band(void);
 static void say_screen(void) {
     lv_obj_t *win = dialog_obj();
 
-    char keys[300], tail[320] = "";
+    /* The F keys are not read here: KEY held reads them (Read the F keys) */
+    const char tail[] = "";
 
-    buttons_page_text(keys, sizeof(keys));
-    if (keys[0]) snprintf(tail, sizeof(tail), "F-keys: %s", keys);
     if (win) {
         voice_focus_read_full(NULL, win, tail);
         return;
