@@ -13,6 +13,10 @@
  * which sends, or closing the whole app (#280). */
 
 #include "text_popup.h"
+
+#include <string.h>
+#include <stdio.h>
+#include "voice_focus.h"
 #include "gui_events.h"
 #include "radio.h"
 #include "key_input.h"
@@ -213,6 +217,11 @@ lv_obj_t *textarea_window_open_w_label(textarea_window_cb_t ok_cb, textarea_wind
     lv_obj_t *w = textarea_window_open(ok_cb, cancel_cb);
 
     lv_label_set_text(title, text);
+    /* Speech: the window's title first ("DX call", "Subj"), then the focused field as usual */
+    char said[64];
+    snprintf(said, sizeof(said), "%s", text ? text : "");
+    for (size_t n = strlen(said); n > 0 && (said[n - 1] == ' ' || said[n - 1] == ':'); n--) said[n - 1] = '\0';
+    if (said[0]) voice_focus_hint(said);
     return w;
 }
 

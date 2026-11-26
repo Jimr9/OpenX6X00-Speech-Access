@@ -3,12 +3,11 @@
 Releases are built on a PC (WSL2, Ubuntu 22.04) and published on GitHub; radios update from the GitHub release
 (Settings, Check, Install).
 
-- `ox_speech_build.sh`: the full build. It makes a copy of RF.Guru's `buildroot/local-build.sh` with three changes
-  (the XARA step skipped: its source is gone from GitHub; RHVoice and six English voices kept; the GUI package
-  depending on rhvoice) and runs it. Expects the buildroot tree at `~/openx6x00/AetherX6100Buildroot`
-  (`git clone --recurse-submodules https://github.com/Guru-RF/AetherX6100Buildroot.git`; the 0.3.12.1 release was
-  built on its commit 273083c; local-build.sh changes that tree in place) and this repository at
-  `/mnt/c/claude/openx6x00`.
+- `ox_speech_build.sh`: the full build. It runs RF.Guru's `buildroot/local-build.sh` as it is (since upstream took
+  the speech in, it keeps RHVoice with the four free English voices and builds XARA itself) with the two trees named.
+  Expects the buildroot tree at `~/openx6x00/AetherX6100Buildroot`
+  (`git clone --recurse-submodules https://github.com/Guru-RF/AetherX6100Buildroot.git`; built on its commit
+  273083c; local-build.sh changes that tree in place) and this repository at `/mnt/c/claude/openx6x00`.
 - It signs the update bundle with `~/.config/openx6x00/update-key.pem`. **The key is in no repository**: keep backups
   of it (a copy is at `C:\Users\Jim\.config\openx6x00-speech\update-key.pem`). Its public half is
   `rootfs/usr/share/x6100/update.pub`. The same key signs X6100 Accessibility.
