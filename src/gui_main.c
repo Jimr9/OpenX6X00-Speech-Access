@@ -69,6 +69,7 @@
 #include "bt_dev.h"
 #include "usb_devices.h"
 #include "image_level.h"
+#include "card_space.h"
 #include "ghostnet.h"
 #ifdef BOARD_X6200
 #include "dialog_base_update.h"
@@ -82,6 +83,7 @@
 #include "voice.h"
 #include "first_start.h"
 #include "perf_hud.h"
+#include "load_meter.h"
 
 /* LVGL draws the areas it refreshes here, then flushes them to the panel */
 #define DISP_BUF_SIZE (BOARD_DISP_W * BOARD_DISP_H * 4)
@@ -234,11 +236,14 @@ static void inputs_open(void) {
 
 #ifdef BOARD_DEV_MFK_INNER
     /* The inner ring of the MFK knob chooses what the MFK controls, in every state (the stock
-     * X6200 GUI's use of it); the outer knob then changes the value */
+     * X6200 GUI's use of it); the outer knob then changes the value. With MFK rings: Swapped the two rings change
+     * places (mfk_rings.h, #354): this knob sends the keys of whichever ring steps the control */
     rotary_t *inner = rotary_init(BOARD_DEV_MFK_INNER);
 
     if (inner) {
         gui_wake_add_fd(inner->fd);
+        mfk_rings_inner(inner->fd);
+        inner->mfk_step = true;
         for (int i = 0; i < 3; i++) {
             inner->left[i]  = KEY_MFK_PREV;
             inner->right[i] = KEY_MFK_NEXT;
@@ -355,6 +360,7 @@ static void services_start(void) {
     start_trace("services: QSO log read");
     dialog_cluster_start_client();
     image_level_notice_init();   /* a newer card image wanted: said once per version */
+    card_space_notice_init();    /* the card almost full (Settings > Info > STORAGE): said once per start (#341) */
     ghostnet_init();             /* the reminder before a GhostNet net, when the operator turned it on */
     meteo_alerts_init();         /* APP > Weather > Notices: off by default */
 #ifdef BOARD_X6200
@@ -410,7 +416,8 @@ static uint32_t refr_last_run(void) {
 }
 
 static void gui_loop(void) {
-    bool drawn = false;     /* the start trace's last stage */
+    bool    drawn = false;      /* the start trace's last stage */
+    int64_t woke  = get_time(); /* the Load meter: the last wait's end; from there to the next wait the keys wait */
 
     for (;;) {
         int64_t start = get_time();     /* the performance overlay's loop time */
@@ -450,6 +457,7 @@ static void gui_loop(void) {
         int32_t  draw_in = gui_wake_draw_left(now);
 
         perf_loop_time(end - start);
+        load_meter_busy(end - woke);    /* the input's pass and this one: a key pressed meanwhile is read after both */
         if (draw_in >= 0 && draw_in < wait) wait = draw_in;
         /* A timer due at once after a frame (a frame that ran past its period, 3D with FT8 on the X6100): 5 ms for
          * the other threads, as before #183; else 1 ms. Input wakes it all the same */
@@ -457,7 +465,14 @@ static void gui_loop(void) {
 
         /* Until LVGL's next timer (at most 100 ms), or input: then the keys and knobs are read at once, and what
          * they changed drawn, frames at least min_frame_gap() apart */
-        if (gui_wake_wait(wait < least ? least : wait > 100 ? 100 : wait) == WAKE_INPUT) {
+        int32_t    sleep_ms = wait < least ? least : wait > 100 ? 100 : wait;
+        gui_wake_t woken    = gui_wake_wait(sleep_ms);
+
+        woke = get_time();
+        /* A wait that ended past its time: the processor was given to others meanwhile, and a key pressed then waited
+         * as long as well (the Load meter's dot) */
+        if (woken == WAKE_NONE && woke - end > sleep_ms) load_meter_busy(woke - end - sleep_ms);
+        if (woken == WAKE_INPUT) {
             lv_tick_mono_set(get_time());
             gui_wake_read_input();
             frame = refr_last_run();
@@ -508,6 +523,7 @@ int main(void) {
     start_trace("services started");
 
     lv_scr_load(screen);
+    load_meter_init();        /* Settings > Info > SYSTEM > Load meter (#233): over every screen, when on */
     walkie_init(screen);      /* its screen instead, when on */
     if (!walkie_on() && param_i_get(cfg_field_boot)) {
         main_screen_start_app(ACTION_APP_FIELD);
@@ -530,7 +546,8 @@ int main(void) {
     if (voice_is_on() && param_i_get(cfg_voice_mode) == VOICE_LCD && !backlight_is_dark()) {
         backlight_switch();
     }
-    voice_say_text_fmt("Open X 6 X hundred, ready");    /* with speech on: the radio is up */
+    /* with speech on: the radio is up; a radio switched off locked starts locked (#342), so that is said too */
+    voice_say_text_fmt("Open X 6 X hundred, ready%s", param_i_get(cfg_dial_lock) ? ", dial locked" : "");
     gui_loop();
     return 0;
 }

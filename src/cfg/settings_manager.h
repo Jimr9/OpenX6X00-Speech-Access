@@ -163,6 +163,11 @@ class SettingsManager {
     // lines hide after 0 never (the default), 1 3 s, 2 5 s, 3 10 s without a key (screen_main.c)
     Parameter<int32_t> p_buttons_hide{"buttons_hide", 0, 0, 3,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Settings > Apps (live, #351): the apps taken out of the APP grid and the APP button pages, by their names in
+    // apps_list.c with commas between ("zello,dmr"); "" (the default) shows them all. What is hidden, not what is
+    // shown: an app a later version adds is shown
+    Parameter<std::string> p_apps_hidden{"apps_hidden", "", apps_hidden_validate,
+        StorageType::GLOBAL, pending_writes_, {}, &global_params_};
     // Keep knob lines (Settings > Display > INTERFACE, live, #128): with Hide buttons on, the two knob lines stay
     // on the screen, where they are, when the buttons hide (knob_info.cpp). Off (the default): they hide with them
     Parameter<int32_t> p_knob_lines_stay{"knob_lines_stay", false, 0, 1,
@@ -171,6 +176,11 @@ class SettingsManager {
     // the next control on its list, ready to change; a held one does what any press does with it off (screen_main.c,
     // knob_press.h). Off (the default): a press switches between changing the value and choosing the control
     Parameter<int32_t> p_knob_press_next{"knob_press_next", false, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // MFK rings (Settings > Display > INTERFACE, the X6200 only, live, #354): 0 Stock (the default), the lower knob's
+    // outer ring is the MFK and its inner ring steps the MFK's control; 1 Swapped, the other way round (mfk_rings.h,
+    // mfk_device.c reads it at each read). The X6100's MFK has one ring: no row there, and the value is not looked at
+    Parameter<int32_t> p_mfk_rings{"mfk_rings", 0, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Panel stripes fix (Settings > Display > BACKLIGHT, live, #239): the display engine's gamma table sends 8..31
     // out as 32 in each colour, for panels that stripe in those dark values (panel_stripes.c, tcon_gamma.h). Off
@@ -205,6 +215,11 @@ class SettingsManager {
     Parameter<int32_t> p_freq_step_lo{"freq_step_lo", 0, 0, FREQ_STEPS_N - 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_freq_step_hi{"freq_step_hi", FREQ_STEPS_N - 1, 0, FREQ_STEPS_N - 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // The user's frequency lock (FST held, LOCK, the Panel's LOCK, a key given Frequency lock), kept across a
+    // restart (#342): screen_main.c writes it with each change of the user's lock and starts with it. No row in
+    // Settings. An app's hold of the dial is never in it (dial_lock.h)
+    Parameter<int32_t> p_dial_lock{"dial_lock", false, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Birdies (birdie.c): 0 nothing, 1 marked on the waterfall, 2 marked and notched in the passband
     Parameter<int32_t> p_birdie_marks{"birdie_marks", 1, 0, 2,
@@ -425,6 +440,10 @@ class SettingsManager {
     /* "For you": the callers pinned under the list (off: the list only) */
     Parameter<int32_t> p_ft8_foryou{"ft8_foryou", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    /* CQ rows (page 5, #359): 0 Edge, F4OLI's plain CQ rows with a green edge (the default since v0.3.13); 1 Filled,
+     * the green CQ rows of v0.3.12 (ft8/row_look.h) */
+    Parameter<int32_t> p_ft8_cq_rows{"ft8_cq_rows", 0, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     /* Auto Sync (Settings > GPS / Clock): the clock set from the decodes' DT when neither NTP nor the GPS keeps it (ft8/time_sync.h);
      * off by default */
     Parameter<int32_t> p_ft8_auto_sync{"ft8_auto_sync", false, 0, 1,
@@ -519,6 +538,11 @@ class SettingsManager {
         StorageType::GLOBAL, pending_writes_, &global_params_};
     // Voice messages (the Field Ops voice CQ too): playback level, dB
     Parameter<int32_t> p_voice_msg_gain{"voice_msg_gain", 0, -20, 10,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // A headset's mic on the air, hands-free on a USB Bluetooth dongle (Settings > Bluetooth > Mic gain), dB: -6, as
+    // OlivLoze's fork has it, where 0 dB drove the ALC to 7.6 on F4OLI's dummy load (24/11/2026). No migration: a
+    // missing row is the default
+    Parameter<int32_t> p_bt_mic_gain{"bt_mic_gain", -6, -20, 10,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // Spoken feedback (voice.cpp, Settings > Voice). The same names in the database as Jimr9's speech builds.
@@ -710,6 +734,10 @@ class SettingsManager {
     // the main screen (main_call.c), and on the boot logo from the next start (bootanim/bootanim.c reads it)
     Parameter<int32_t> p_callsign_show{"callsign_show", 0, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Frequency (Settings > Display > MAIN SCREEN, live, #344): the main screen writes a frequency as 14.074.000 (0,
+    // as up to v0.3.13) or as one decimal number, 14.074000 (1): freq_strip_dot() (freq_strip.c)
+    Parameter<int32_t> p_freq_one_dot{"freq_one_dot", 0, 0, 1,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
     // CW tune and WPM (Settings > Display > MAIN SCREEN, live, #308): in CW the CW Tuner's bars and the decoder's
     // speed on the spectrum (0, as up to v0.3.13) or in the frequency strip, between the band and the frequency (1,
     // freq_strip.c), back on the spectrum while the strip has no room for them
@@ -720,6 +748,15 @@ class SettingsManager {
     Parameter<int32_t> p_textlog{"textlog", true, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
     Parameter<int32_t> p_textlog_mb{"textlog_mb", 10, 1, 100,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Settings > Info > STORAGE > Low space warning (card_space.h, #341): a start with less room on the DATA
+    // partition says so once. A card_warn_t: 0 Off, 1 under 100 MB (the default), 2 250 MB, 3 500 MB, 4 1 GB
+    Parameter<int32_t> p_card_space_warn{"card_space_warn", 1, 0, 4,
+        StorageType::GLOBAL, pending_writes_, &global_params_};
+    // Settings > Info > SYSTEM > Load meter (load_meter.c, #233): the processor's, the GUI thread's and the memory's
+    // load in thin bars at the screen's left edge, over every screen, and a mark when the GUI loop was late. Off (the
+    // default): nothing is read or drawn. A diagnosis for keys that go missing, not a look
+    Parameter<int32_t> p_load_meter{"load_meter", 0, 0, 1,
         StorageType::GLOBAL, pending_writes_, &global_params_};
 
     // The first-start guide had (first_start.c): finished, skipped or left once. No row on a new card or after a
@@ -1200,6 +1237,8 @@ class SettingsManager {
     // on, is kept for the zoom in use. step_zoom_slot: the zoom's p_mode_step_z*, nullptr for a zoom not 1, 2, 4, 8
     Parameter<int32_t> *step_zoom_slot(int32_t zoom);
     void step_zoom(Subject *subj);
+    // After a mode's zoom, step and zoom's steps are loaded: the step of the zoom in use is the mode's step (#348)
+    void step_zoom_agree();
     static void step_zoom_cb(Subject *subj, void *user_data);
 
     // Switch-time band loads: never loads current_vfo; when `implicit` is true
@@ -1251,6 +1290,8 @@ class SettingsManager {
     // The boot sound's own text as p_boot_text keeps it (boot_cw_clean). Pure function
     static std::string boot_text_validate(const std::string &val);
     static std::string kbd_dev_volume_validate(const std::string &val);
+    // The hidden apps as p_apps_hidden keeps them: the names apps_list.c knows, in its order. Pure function
+    static std::string apps_hidden_validate(const std::string &val);
 
     // Filter category of a mode (SSB/AM/FM/CW; unknown/default -> SSB).
     enum class FilterMode {

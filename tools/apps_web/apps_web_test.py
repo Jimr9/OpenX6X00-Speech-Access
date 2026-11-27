@@ -319,6 +319,43 @@ class Countries(unittest.TestCase):
         self.assertEqual(diff[:10], [], "%d of %d differ" % (len(diff), len(radio)))
 
 
+class PanelFlags(unittest.TestCase):
+    """The Panel page's FT8 rows (PR #335): the radio sends the number of the sender's flag in flags.h, which is its
+    cell in flags.png; the page turns it into the sprite's offset itself"""
+
+    def setUp(self):
+        with open(os.path.join(TOP, "webserver", "src", "x6100_webserver", "views", "panel.html")) as f:
+            self.page = f.read()
+        with open(os.path.join(STATIC, "img", "flags.json")) as f:
+            self.n = json.load(f)["n"]
+
+    def test_the_radio_sends_the_flags_number(self):
+        src = source("remote_server.c")
+        self.assertIn('",\\"flag\\":%d", cd->country[0] ? cd->flag : -1', src, "none for a row without a country")
+        self.assertIn("row->flag = (int16_t)flag_of[i].flag;", source("ft8_window.c"),
+                      "the flag's number (flag_px, flag_iso), not the prefix's place in flag_of")
+
+    def test_the_sprite_as_the_other_pages(self):
+        self.assertIn("const FLAG_COLS = %d;" % self.n, self.page)
+        css = re.search(r"^\.ft li \.k \.flag \{([^}]*)\}", self.page, re.M).group(1)
+        self.assertIn("background:url(/static/img/flags.png?v=1) no-repeat", css)
+        self.assertIn("background-size:%dpx auto" % (self.n * 20), css)
+        self.assertIn("width:20px; height:15px", css)
+        self.assertNotIn("\U0001F1FA\U0001F1F8", self.page, "no table of the page's own to drift from flags.h")
+
+    @unittest.skipUnless(shutil.which("node"), "no node")
+    def test_the_cell_of_each_flag(self):
+        src = source("flags.h")
+        flags = len(re.findall(r'"([a-z]{2})"', src[src.index("flag_iso"):src.index("flag_of")]))
+        fn = re.search(r"  const FLAG_COLS = \d+;\n  function flagCell\(k\) \{\n(?:.*\n){2}  \}\n", self.page).group(0)
+        js = fn + "process.stdout.write(JSON.stringify([%s].map(flagCell)));" % ", ".join(
+            [str(k) for k in range(flags)] + ["-1", "undefined", "null", "1.5", '"3"'])
+        got = json.loads(subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout)
+        self.assertEqual(got[:flags], [{"x": -(k % self.n) * 20, "y": -(k // self.n) * 15} for k in range(flags)])
+        self.assertEqual(got[flags:], [None] * 5, "no flag, or a GUI that sends none")
+        self.assertEqual(got[133], {"x": -100, "y": -120}, "K's: column 5, row 8")
+
+
 class AutoOpen(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "no node")
     def test_the_rules(self):
@@ -361,6 +398,24 @@ class DisplayPage(unittest.TestCase):
         self.assertIn('{"walkie_wf", &cfg_sm.p_walkie_wf, 0, 1}', sock)
         wf = cards[cards.index('["wf", "Spectrum and waterfall"'):cards.index('["layers", ')]
         self.assertIn('["walkie_wf", "Walkie mini waterfall", ', wf)
+
+    def test_apps_card_and_the_radio_agree(self):
+        """The Apps card (#351) is made from the radio's own list (disp_get's "apps": no list of apps in the page),
+        and what its switches and Show all send are options the GUI's socket takes; the web server passes the app's
+        name on"""
+        page = open(os.path.join(TOP, "webserver", "src", "x6100_webserver", "views", "display.html")).read()
+        sock = source("cfg_socket.cpp")
+        server = open(os.path.join(TOP, "webserver", "src", "x6100_webserver", "apps.py")).read()
+        self.assertIn('send({name: "app_hide", app: a[0], val: hide}', page)
+        self.assertIn('send({name: "apps_show_all", val: 1}', page)
+        self.assertIn("D.apps.forEach(", page)
+        self.assertNotIn('"zello"', page)
+        for name in ("app_hide", "apps_show_all"):
+            self.assertIn('!strcmp(d->name, "%s")' % name, sock[sock.index("static void disp_apply("):], name)
+            self.assertIn('!strcmp(d->name, "%s")' % name, sock[sock.index("static const char *disp_set("):], name)
+        self.assertIn('",\\"apps\\":["', sock)
+        self.assertIn('cJSON_GetObjectItemCaseSensitive(req, "app")', sock)
+        self.assertIn('cmd["app"] = data["app"]', server)
 
 
 class RemoteWords(unittest.TestCase):

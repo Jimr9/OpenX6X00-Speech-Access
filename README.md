@@ -177,7 +177,7 @@ X6100-Baseband test release (its TESTING.md, with the way back to Xiegu's base).
 | **DX Cluster** | Spots on the waterfall, in a column beside it and in a full app that follows the VFO; filters by mode, band, activity (POTA, SOTA, WWBOTA, HOTA) and the spotter's country (only the spots heard in PA and ON, say), alerts on calls and prefixes, spot snap when turning slowly; fifteen public servers built in, DXFUN by default. One login, a Link switch, and a login of its own if you set one (your call with `-2`, on the web Cluster page) so a logger can use the call at the same time. |
 | **Field Ops** | A second interface for SOTA, POTA, WWBOTA, HOTA, WWFF, TOTA, WCA, MOTA, lighthouse (LH, ARLHS) and LLOTA (lakes and lagoons) activations with big tiles for gloves: the summit or park found from the GPS or the locator, the references of the whole world offline after one Update list with internet, CQ, a log straight to ADIF with the references, self-spots to pota.app, wwbota.org, cqhota.app and the WWFF Spotline (the last two with your own key) and to the DX cluster (the only spot for SOTA, TOTA, WCA, MOTA, LH and LLOTA), QRZ Logbook upload. Tiles on the Air: the 6-character locator square you are in, from the GPS, with the eight around it. |
 | **Wavelog** | Every QSO the radio logs, in every mode, goes to your own [Wavelog](https://github.com/wavelog/wavelog) a few seconds later: a queue on the SD card while there is no network, the station profile chosen by the radio's callsign (DF8MH, DF8MH/P), the result on the display. |
-| **Winlink** | Winlink email over HF from the radio alone, no computer and no internet: [Pat](https://getpat.io) is the mail program, its mailbox a web page on a phone or a laptop, and ARDOP the modem, through the radio's own audio, or Mercury (experimental: faster, with the few stations that run it), or XARA (experimental: speaks VARA HF, so the VARA HF gateways answer it; VARA's free speed unless you tick that you hold a VARA HF licence, which the radio does not check). When Pat calls a gateway the radio tunes there in USB-D and keys itself. Turned on in the web configurator, Operating > Winlink, with your callsign, locator and Winlink password; the page shows the radio as Winlink will use it and how each connection went, with what to do next ([manual](docs/MANUAL.md#winlink)). With no phone at hand, APP > Mail reads, writes and sends the same mail on the radio itself, with the touch screen, the MFK or a keyboard ([manual](docs/MANUAL.md#mail-on-the-radio)). |
+| **Winlink** | Winlink email over HF from the radio alone, no computer and no internet: [Pat](https://getpat.io) is the mail program, its mailbox a web page on a phone or a laptop, and ARDOP the modem, through the radio's own audio, or Mercury (experimental: faster, with the few stations that run it), or XARA (experimental: speaks VARA HF, so the VARA HF gateways answer it; VARA's free speed unless you tick that you hold a VARA HF licence, which the radio does not check). When Pat calls a gateway the radio tunes there in USB-D and keys itself. Turned on in the web configurator, Operating > Winlink, with your callsign, locator and Winlink password; the page shows the radio as Winlink will use it and how each connection went, with what to do next ([manual](docs/MANUAL.md#winlink)). With no phone at hand, APP > Mail reads, writes and sends the same mail on the radio itself, with the touch screen, the MFK or a keyboard ([manual](docs/MANUAL.md#mail-on-the-radio)), and its Listen answers another station's P2P call while you are at the radio ([manual](docs/MANUAL.md#listening-for-p2p-calls)). |
 | **Bands** | A live picture of 160 to 6 m from the cluster and the Reverse Beacon Network, and a test beacon that shows who hears you from your own antenna. |
 | **Propagation** | [Solar data and the band forecast](docs/MANUAL.md#propagation) (N0NBH, kept for when there is no network) on a world map with your QTH, the night and the grey line, and the 18 NCDXF beacons followed through their 3-minute cycle: which you hear, how strong, on which band. |
 | **Scanner** | [Stops on activity](docs/MANUAL.md#scanner) through the memory channels, the airband (X6200), the 40 CB channels or the band plan segment you are in, the speaker quiet while it looks; a level learnt per frequency, lockouts, hang time. Receive only. |
@@ -495,7 +495,7 @@ docs/                    MANUAL.md, THEMES.md, MENUS.md, UPSTREAM_README.md, aud
 - [Screenshots](docs/screenshots/README.md): how they are taken.
 - [The TCI server's host test](tools/tci/README.md), [the Winlink modems'](tools/winlink/README.md), the
   [ITU region's](tools/itu_region/itu_region_test.c), the [DX cluster bands'](tools/cluster/cluster_bands_test.c),
-  the [DATA partition's](tools/data_partition/Makefile), the [web Memories page's](tools/channels/Makefile), the
+  the [DATA partition's](tools/data_partition/Makefile), the [channel list's and the web Memories page's](tools/channels/Makefile), the
   [web Backup page's WiFi restore](tools/wifi_restore/Makefile), the
   [battery readings'](tools/battery/bat_watch_test.c) and the [PC build](host/README.md).
 
@@ -562,7 +562,8 @@ BOARD_DISP_W/H with a landscape blit (#162), taps on the F-bar and decoded keys
 (#163), the spectrum left unpainted while hidden (#177) and TCI's drive, VFO
 limits and RIT clamp from board.h (#189); Calin Rigo (timerealm) the 3D band
 scope (#161); Spyyena Contestia (#154) and the SSH page's FIDO2 security keys,
-with verify-required or no-touch-required (#274); DF8MH the Wavelog upload (#12); Trey
+with verify-required or no-touch-required (#274), and Flights asking once a
+minute however often the range is changed (#349); DF8MH the Wavelog upload (#12); Trey
 (rewtraw) the PC build in Docker (#180), LVGL's clock from CLOCK_MONOTONIC
 (#182), the GUI loop that wakes on keys, knobs and events (#183), the
 Propagation and Scanner apps (#184), APPS and Modes over the whole strip, the CW
@@ -578,7 +579,8 @@ own lines in channels 11 to 13 (#327); erikkt a keyboard's and a Bluetooth knob'
 volume keys on the RX volume, never the CW paddle (#306), and Tuning steps
 from, to, the range of steps FST, a keyboard's + and _ and a knob's Step go
 through (#314); HarryEMartland the Panel page's worked FT8
-stations struck through (#326).
+stations struck through (#326) and the FT8 page's flags (#335); Daolang239342
+the Chinese (zh_CN) translation's missing texts and its words made one (#356).
 
 From their forks: condoruy (Cóndor Tecnológico, the CX8ANM edition) the GUI's
 languages, the hook that passes every text to LVGL through the language and
@@ -589,18 +591,20 @@ the spectrum's fill by level, the callsign on the boot logo, more German, Italia
 their v1.1.7 lists, the multiboot card's warning before a new card image,
 the weather from the locator or a place typed, DMR heard over the internet
 with mbelib, DMR's listening log with its ADIF of listening reports, DMR's
-map of the stations heard and Flights' marks on the aircraft near and low
-while the radio is on the air band; OlivLoze NOTA, XOTA, the map of a reference's surroundings, the phone's
+map of the stations heard, Flights' marks on the aircraft near and low
+while the radio is on the air band and the battery's % on a worn pack (the base's, not the voltage's that sags
+under load, capped near the end); OlivLoze NOTA, XOTA, the map of a reference's surroundings, the phone's
 position and clock from the Panel, the WeFax commands of the browser remote,
 WeFax's Auto Plan and its plan named from the charts received (Northwood's
 night charts on 2618.5 kHz too), Bulletin (the newest copy of fair quality), All
 Charts as tiles, full-screen viewer, Fix over the full screen, Auto Tilt, the
 view waiting for the next chart and Night, the clock from a time station's
-minute marker and ntpd's own word, JS8's board of stations (red for 3 minutes
-after an answer), its lane over the waterfall and its conversations with their
-way back, FT8's tiles, the calls over its waterfall, its list by slot with the
-CQs standing out and its buttons by task, and the browser's Apps pages, which
-open their app on the radio:
+minute marker and ntpd's own word, JS8's board of stations (red for a minute
+after a message, or until selected; a heartbeat's answer neither red nor new; AUTO going idle while the list
+follows its new rows), its lane over the waterfall and its conversations with their
+way back, FT8's tiles (red for a minute or until selected, a station that called first and shown for 3 minutes), the calls over its waterfall, its list by slot with the
+CQs standing out and its buttons by task, a Bluetooth headset's mic on the air through a USB dongle with the
+side PTT key, and the browser's Apps pages, which open their app on the radio:
 FT8, JS8 with its chat and WeFax, their waterfalls, maps, flags and countries; Chris Lawson (cjlawson02) the spectrum's dB without powf and log10f,
 the paddle keyer's start after the settings, the 3D waterfall drawn on a
 thread of its own and its picture without planes drawn in columns and turned

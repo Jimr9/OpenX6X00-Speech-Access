@@ -32,6 +32,7 @@
 extern "C" {
 
     #include "app_window.h"
+    #include "settings_place.h"
 #ifdef BOARD_X6200
     #include "dialog_base_update.h"
 #endif
@@ -50,6 +51,10 @@ extern "C" {
     #include "cfg/kbd_devices.h"
     #include "clock.h"
     #include "bat_est.h"
+    #include "card_space.h"
+    #include "load_stat.h"
+    #include "apps_menu.h"
+    #include "cfg/apps_list.h"
     #include "audio.h"
     #include "smeter.h"
     #include "main.h"
@@ -113,6 +118,7 @@ static uint8_t info_row(uint8_t row, const char *label, const char *val);
 
 static void make_walkie_page();
 static void make_voice_page();
+static void make_apps_page();
 static void wl_row_label(uint8_t row, const char *text);
 static void nn_load(char *out, size_t size);     /* the network name (Wireless) */
 static void ts_update();                         /* Tailscale (Wireless) */
@@ -143,7 +149,7 @@ static void key_cb(lv_event_t *e);
 static bool tabs_said;      /* a hint naming the tabs is on its way: tab_press() leaves it */
 
 /* "Settings tabs, page 2: F2 Bluetooth, F3 Keys, F4 Cluster, F5 TX Cal. F1 more tabs" */
-static void tabs_hint(const char *head, buttons_page_t *pg, int num, bool page_only = false) {
+static void tabs_hint(const char *head, buttons_page_t *pg, int num, button_data_t *open, bool page_only = false) {
     char   s[300];
     size_t n = (size_t)snprintf(s, sizeof(s), "%s, page %d of 3:", head, num);
 
@@ -154,7 +160,7 @@ static void tabs_hint(const char *head, buttons_page_t *pg, int num, bool page_o
         if (page_only) {
             voice_focus_hint_alone(s);
         } else {
-            if (pg->items[1] && pg->items[1]->label) snprintf(s + n, sizeof(s) - n, ". %s tab", pg->items[1]->label);
+            if (open && open->label) snprintf(s + n, sizeof(s) - n, ". %s tab", open->label);
             voice_focus_hint(s);
         }
         tabs_said = true;
@@ -165,9 +171,9 @@ static void tabs_hint(const char *head, buttons_page_t *pg, int num, bool page_o
             n += snprintf(s + n, sizeof(s) - n, "%s F%d %s", i == 1 ? "" : ",", i + 1, pg->items[i]->label);
         }
     }
-    /* the page's first tab opens with it: named, then its first row ("... F1 more tabs. Info tab. Version, ...") */
-    if (pg->items[1] && pg->items[1]->label)
-        snprintf(s + n, sizeof(s) - n, ". F1 more tabs. %s tab", pg->items[1]->label);
+    /* the tab that opens with it: named, then its row ("... F1 more tabs. Info tab. Version, ...") */
+    if (open && open->label)
+        snprintf(s + n, sizeof(s) - n, ". F1 more tabs. %s tab", open->label);
     else
         snprintf(s + n, sizeof(s) - n, ". F1 more tabs");
     voice_focus_hint(s);
@@ -179,7 +185,7 @@ static void page_press(button_data_t *btn) {
     if (btn->next && btn->next->items[1]) {
         int num = btn->next->items[0] && btn->next->items[0]->label ? btn->next->items[0]->label[10] - '0' : 0;
 
-        tabs_hint("Settings tabs", btn->next, num, true);
+        tabs_hint("Settings tabs", btn->next, num, btn->next->items[1], true);
         tab_press(btn->next->items[1]);
     }
 }
@@ -207,10 +213,11 @@ static button_data_t btn_txcal     = { .type = BTN_TEXT, .label = "TX Cal", .pre
 static button_data_t btn_info      = { .type = BTN_TEXT, .label = "Info", .press = tab_press };
 static button_data_t btn_walkie    = { .type = BTN_TEXT, .label = "Walkie", .press = tab_press };
 static button_data_t btn_voice     = { .type = BTN_TEXT, .label = "Voice", .press = tab_press };
+static button_data_t btn_apps      = { .type = BTN_TEXT, .label = "Apps", .press = tab_press };
 
 static buttons_page_t btn_page   = {{&btn_p1, &btn_general, &btn_display, &btn_audio, &btn_wireless}};
 static buttons_page_t btn_page_2 = {{&btn_p2, &btn_bluetooth, &btn_keys, &btn_cluster, &btn_txcal}};
-static buttons_page_t btn_page_3 = {{&btn_p3, &btn_info, &btn_walkie, &btn_voice}};
+static buttons_page_t btn_page_3 = {{&btn_p3, &btn_info, &btn_walkie, &btn_voice, &btn_apps}};
 static buttons_page_t *btn_pages[] = {&btn_page, &btn_page_2, &btn_page_3};
 
 static dialog_t dialog = {
@@ -242,7 +249,7 @@ static const struct {
     {&btn_bluetooth, make_bluetooth_page, "bluetooth"}, {&btn_keys, make_keys_page, "keys"},
     {&btn_cluster, make_cluster_page, "cluster"},   {&btn_txcal, make_txcal_page, "txcal"},
     {&btn_info, make_info_page, "info"},            {&btn_walkie, make_walkie_page, "walkie"},
-    {&btn_voice, make_voice_page, "audio"},
+    {&btn_voice, make_voice_page, "audio"},         {&btn_apps, make_apps_page, "channels"},
 };
 
 /* Left rail: the tabs of all button pages, numbered, the current one marked */
@@ -343,13 +350,19 @@ static void mark_tab(button_data_t *btn_data) {
     rail_mark(btn_data);
 }
 
+static button_data_t *cur_tab;     /* the tab shown: Settings opens on it again (#362) */
+
+/* A tab chosen (its button, its line on the rail, a page turned) opens at its top */
 static void tab_press(button_data_t *btn) {
     if (!tabs_said && btn->label) {
         voice_focus_hint(btn->label);   /* "Wireless", then its first row */
     }
     tabs_said = false;
     for (auto &t : tabs) {
-        if (t.btn == btn) t.make();
+        if (t.btn == btn) {
+            cur_tab = btn;
+            t.make();
+        }
     }
     mark_tab(btn);
 }
@@ -881,6 +894,7 @@ static const key_action_t front_actions[] = {
     {" RX recorder on/off ", ACTION_RECORDER},
     {" Screen rec on/off ", ACTION_SCREEN_REC},
     {" Mute ", ACTION_MUTE},
+    {" Charger Off/On/Shadow ", ACTION_CHARGER},    /* General > CONTROLS > Charger to its next state (#276) */
     {" Frequency lock on/off ", ACTION_FREQ_LOCK},
     {" Speech mode ", ACTION_VOICE_MODE},
     {" Repeat last speech ", ACTION_VOICE_REPEAT},
@@ -938,6 +952,7 @@ static const key_action_t mic_actions[] = {
     {" RX recorder on/off ", ACTION_RECORDER},
     {" Screen rec on/off ", ACTION_SCREEN_REC},
     {" Mute ", ACTION_MUTE},
+    {" Charger Off/On/Shadow ", ACTION_CHARGER},
     {" Step up ", ACTION_STEP_UP},
     {" Step down ", ACTION_STEP_DOWN},
     {" Frequency lock on/off ", ACTION_FREQ_LOCK},
@@ -1574,6 +1589,9 @@ static struct {
     lv_obj_t             *rx;
     lv_obj_t             *vol;
     lv_obj_t             *mute;
+    lv_obj_t             *dongle_note;  /* USB dongle: in use or not (bt-dongle) */
+    lv_obj_t             *mic_pill;     /* a headset's mic, hands-free on the dongle (btaudio-ctl) */
+    lv_obj_t             *mic;
     wl_row_t              rows[BT_ROWS];
     std::vector<bt_dev_t> devs;
     std::vector<bt_dev_t> found;    /* not paired, seen since the last Scan */
@@ -1626,7 +1644,7 @@ static void wl_pill(lv_obj_t *obj, const char *text, uint32_t bg, uint32_t fg) {
  * their own grid. `grid` is the section being filled, the rows go from row 1. */
 
 #define CARD_HEAD_H     30
-#define ROW_LABEL       LV_OBJ_FLAG_USER_1     /* a row's label, with a dotted leader to its control */
+#define ROW_LABEL       SETTINGS_ROW_LABEL     /* a row's label, with a dotted leader to its control */
 
 static lv_coord_t *card_cols;
 
@@ -2634,6 +2652,30 @@ static void bt_mute_cb(lv_event_t *e) {
     btaudio_mute_set(lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED));
 }
 
+#if BOARD_BT_DONGLE
+/* USB dongle (from OlivLoze's fork, F4OLI): a USB Bluetooth dongle in place of the radio's own, on which a headset's
+ * mic goes on the air with the side PTT key. btcat-ctl keeps it (BTCAT_DONGLE) and hands over: bt-dongle lets the
+ * radio's own go for a dongle plugged in, or takes it back */
+static void bt_dongle_cb(lv_event_t *e) {
+    bool on = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+
+    bt_dev_dongle_set(on);
+    btcat_run("dongle", on);
+    bt_dev_refresh();
+}
+
+static uint8_t make_bt_dongle(uint8_t row) {
+    wl_row_label(row, "USB dongle");
+    bt_switch_cell(row, 1, bt_dev_dongle_get(), bt_dongle_cb);
+    bt.dongle_note = wl_note(row);
+    return row + 1;
+}
+
+/* The headset mic's level on the air, read by audio.c at each block: it changes while on the air, and can be set
+ * before a headset is there */
+static param_slider_t bt_mic_gain_slider = {&cfg_sm.p_bt_mic_gain, -20, 10, 1, "%i dB"};
+#endif
+
 static uint8_t make_bt_devices(uint8_t row) {
     lv_obj_t *obj;
 
@@ -2666,6 +2708,8 @@ static uint8_t make_bt_devices(uint8_t row) {
     return row + 1;
 }
 
+static lv_obj_t * bt_value_row(uint8_t row, const char *label, lv_obj_t **pill);
+
 static uint8_t make_headphones(uint8_t row) {
     lv_obj_t *obj;
 
@@ -2687,6 +2731,19 @@ static uint8_t make_headphones(uint8_t row) {
     bt.mute = bt_switch_cell(row, 1, btaudio_mute_get(), bt_mute_cb);
     lv_label_set_text(wl_note(row), "AF 0 while connected");
     row++;
+
+#if BOARD_BT_DONGLE
+    bt.mic = bt_value_row(row++, "Mic", &bt.mic_pill);
+
+    wl_row_label(row, "Mic gain");
+    obj = lv_obj_create(grid);
+    lv_obj_set_size(obj, SMALL_6, ROW_H);
+    lv_obj_set_grid_cell(obj, LV_GRID_ALIGN_START, 1, 6, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(param_slider(obj, SMALL_4, &bt_mic_gain_slider), LV_ALIGN_LEFT_MID, 10, 0);
+    row++;
+#endif
     return row;
 }
 
@@ -3099,6 +3156,7 @@ static void wl_timer_cb(lv_timer_t *t) {
 static void bt_forget_objs() {
     bt.pill = bt.state = bt.addr = bt.cat = NULL;
     bt.scan_btn = bt.scan_note = bt.rx = bt.vol = bt.mute = NULL;
+    bt.dongle_note = bt.mic_pill = bt.mic = NULL;
 }
 
 static void wl_delete_cb(lv_event_t *e) {
@@ -3121,22 +3179,9 @@ static void focus_row_label(lv_obj_t *obj) {
         lv_obj_set_style_text_color(focus_label, TC(text_value), 0);
         focus_label = NULL;
     }
-    while (obj && lv_obj_get_parent(obj) && lv_obj_get_style_layout(lv_obj_get_parent(obj), 0) != LV_LAYOUT_GRID) {
-        obj = lv_obj_get_parent(obj);
-    }
-    if (!obj || !lv_obj_get_parent(obj)) return;
-
-    lv_obj_t *g = lv_obj_get_parent(obj);
-    int       r = lv_obj_get_style_grid_cell_row_pos(obj, 0);
-
-    for (uint32_t i = 0; i < lv_obj_get_child_cnt(g); i++) {
-        lv_obj_t *c = lv_obj_get_child(g, i);
-
-        if (lv_obj_has_flag(c, ROW_LABEL) && lv_obj_get_style_grid_cell_row_pos(c, 0) == r) {
-            focus_label = c;
-            lv_obj_set_style_text_color(c, TC(text), 0);
-            break;
-        }
+    focus_label = settings_row_label(obj);
+    if (focus_label) {
+        lv_obj_set_style_text_color(focus_label, TC(text), 0);
     }
 }
 
@@ -3145,10 +3190,7 @@ static void focus_row_label(lv_obj_t *obj) {
 static lv_obj_t *reachable_end(lv_group_t *g, bool last) {
     for (lv_obj_t **o = (lv_obj_t **)(last ? _lv_ll_get_tail(&g->obj_ll) : _lv_ll_get_head(&g->obj_ll)); o;
          o = (lv_obj_t **)(last ? _lv_ll_get_prev(&g->obj_ll, o) : _lv_ll_get_next(&g->obj_ll, o))) {
-        lv_obj_t *p = *o;
-
-        while (p && !lv_obj_has_flag(p, LV_OBJ_FLAG_HIDDEN)) p = lv_obj_get_parent(p);
-        if (!p && !lv_obj_has_state(*o, LV_STATE_DISABLED)) {
+        if (settings_reachable(*o)) {
             return *o;
         }
     }
@@ -4890,6 +4932,8 @@ static void make_display_page() {
     row = make_param_choice(row, "Power display", " % + time \n Volts \n Alternate \n % + V ", cfg_sm.p_power_display);
     /* The callsign of General > STATION small on the main screen (main_call.h) and on the boot logo (#292) */
     row = make_param_switch(row, "Callsign", cfg_sm.p_callsign_show);
+    /* The frequency on the main screen with a point after the kHz too, or as one decimal number (#344) */
+    row = make_param_choice(row, "Frequency", " 14.074.000 \n 14.074000 ", cfg_sm.p_freq_one_dot);
     /* In CW the CW Tuner's bars and the decoder's WPM over the spectrum, or in the frequency strip between the band
      * and the frequency (freq_strip.c, #308). Four columns: "Frequency strip" ran over the arrow at three */
     wl_row_label(row, "CW tune and WPM");
@@ -4908,6 +4952,11 @@ static void make_display_page() {
     row = make_param_switch(row, "Keep knob lines", cfg_sm.p_knob_lines_stay);   /* not hidden with the buttons */
     /* A short press of VOL or the MFK: the next control on its list, as the stock firmware does (#282) */
     row = make_param_switch(row, "Knob press: next control", cfg_sm.p_knob_press_next);
+#ifdef BOARD_X6200
+    /* The lower knob's two rings: Stock, the outer one is the MFK and the inner one steps its control; Swapped, the
+     * other way round, at once (mfk_rings.h, #354). The X6100's MFK has one ring */
+    row = make_param_choice(row, "MFK rings", " Stock \n Swapped ", cfg_sm.p_mfk_rings);
+#endif
     row = make_theme(row);
     row = make_font(row);
     row = make_language(row);
@@ -5547,6 +5596,28 @@ static void bt_adapter_update() {
     }
     lv_label_set_text(bt.state, text);
     lv_label_set_text(bt.addr, a.present && a.addr[0] ? a.addr : "-");
+
+#if BOARD_BT_DONGLE
+    bool dongle = false;
+    bool in_use = bt_adapter_sys(NULL, 0, &dongle) && dongle;
+    char src[128];
+
+    if (bt.dongle_note) {
+        lv_label_set_text(bt.dongle_note, !bt_dev_dongle_get() ? "the radio's own in use" :
+                                          in_use ? "in use, the radio's own off" : "not plugged in");
+    }
+    /* The mic: hands-free on the dongle (btaudio-ctl names it); else why there is none */
+    if (bt.mic && btaudio_mic_source(src, sizeof(src))) {
+        wl_pill(bt.mic_pill, "hands-free", theme_hex(TC_ok_bg), theme_hex(TC_ok));
+        lv_label_set_text(bt.mic, "the side PTT sends it");
+    } else if (bt.mic) {
+        bool hp = access("/tmp/btaudio-hp", F_OK) == 0;
+
+        wl_pill(bt.mic_pill, NULL, 0, 0);
+        lv_label_set_text(bt.mic, !bt_dev_dongle_get() ? "with a USB dongle only" :
+                                  !in_use ? "no dongle plugged in" : hp ? "none: music only (A2DP)" : "no headset");
+    }
+#endif
 }
 
 /* btcat writes the number of its clients while it runs */
@@ -5614,6 +5685,9 @@ static void make_bluetooth_page() {
     row = make_bt_power(row);
     bt.state = bt_value_row(row++, "Status", &bt.pill);
     bt.addr = bt_value_row(row++, "Address", NULL);
+#if BOARD_BT_DONGLE
+    row = make_bt_dongle(row);
+#endif
     row = make_bt_pairing(row);
     card_end(row);
 
@@ -6142,10 +6216,56 @@ static uint8_t make_base_update(uint8_t row) {
 }
 #endif
 
+/* Apps (#351): the apps of the APP grid and the APP button pages, a switch each. Off takes the app out of both, the
+ * others close up; a key given to it in Keys, a keyboard's key and whatever else opens it work as before, and an
+ * app that runs goes on. What is hidden is kept (cfg/apps_list.h), so an app a later version brings is shown.
+ * Settings has no switch: this page is in it. Show all brings every app back */
+static lv_obj_t *apps_all_btn;
+
+static void apps_page_again(void *arg) {
+    if (!page) {
+        return;
+    }
+    make_apps_page();
+    if (apps_all_btn) lv_group_focus_obj(apps_all_btn);
+}
+
+static void apps_show_cb(lv_event_t *e) {
+    int  id = (int)(intptr_t)lv_event_get_user_data(e);
+    bool on = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+    char text[APPS_HIDDEN_LEN];
+
+    apps_hidden_format(apps_hidden_set(apps_menu_hidden(), id, !on), text, sizeof(text));
+    cfg_sm.p_apps_hidden.set(text);
+}
+
+static void apps_all_cb(lv_event_t *e) {
+    cfg_sm.p_apps_hidden.set("");
+    msg_update_text_fmt("All apps shown");
+    lv_async_call(apps_page_again, NULL);   /* the switches again, not from inside the button's own event */
+}
+
+static void make_apps_page() {
+    uint32_t hidden = apps_menu_hidden();
+    uint8_t  row;
+
+    grid_create();
+    row = card_begin("APP MENU");
+    wl_row_label(row, "Hidden apps");
+    apps_all_btn = wl_button(row++, "Show all", apps_all_cb);
+    lv_obj_add_event_cb(apps_all_btn, ptr_clear_cb, LV_EVENT_DELETE, &apps_all_btn);
+    for (int id = 0; id < APPID_COUNT; id++) {
+        if (!apps_list_can_hide(id)) continue;
+        wl_row_label(row, apps_list_name(id));
+        row_switch(row++, 4, 3, SMALL_3, !apps_hidden_has(hidden, id), apps_show_cb, (void *)(intptr_t)id);
+    }
+    row = info_row(row, "Settings", "always shown");
+    card_end(row);
+}
+
 /* Info: cards and rows as the other tabs, in the same font */
 static void make_info_page() {
     grid_create();
-    lv_obj_set_style_pad_bottom(page, 6, 0);   /* short page: it fits, no scrolling */
     uint8_t row;
 
     row = card_begin("FIRMWARE");
@@ -6196,22 +6316,113 @@ static void make_info_page() {
     }
     row = info_row(row, "Time left", s);
     card_end(row);
+
+    /* The room left where the recordings, pictures and logs go, and on the system's own partition (#341) */
+    uint64_t room, size;
+
+    row = card_begin("STORAGE");
+    if (card_space_read(BOARD_DATA, &room, &size)) {
+        card_space_line(room, size, s, sizeof(s));
+    } else {
+        snprintf(s, sizeof(s), "not known");
+    }
+    row = info_row(row, "DATA partition", s);
+    if (card_space_read("/", &room, &size)) {
+        card_space_line(room, size, s, sizeof(s));
+        row = info_row(row, "System", s);
+    }
+    /* A start with less room on DATA says so once. Four columns: "Under 100 MB" ran over the arrow at three */
+    wl_row_label(row, "Low space warning");
+    row_choice(row++, 1, 4, SMALL_4, CARD_WARN_CHOICES, cfg_sm.p_card_space_warn.get(), int_choice_cb,
+               &cfg_sm.p_card_space_warn);
+    card_end(row);
+
+    /* The memory as the kernel counts it, and the Load meter (load_meter.h, #233): bars of the processor's, the GUI
+     * thread's and the memory's load over every screen, to see whether a key that did nothing came at a busy moment */
+    char       text[2048];
+    load_mem_t mem;
+
+    row = card_begin("SYSTEM");
+    if (load_read("/proc/meminfo", text, sizeof(text)) && load_mem_parse(text, &mem)) {
+        snprintf(s, sizeof(s), _("%u of %u MB in use"), (unsigned)((mem.total - mem.avail) / 1024),
+                 (unsigned)(mem.total / 1024));
+        row = info_row(row, "Memory", s);
+        if (mem.swap_total) {
+            snprintf(s, sizeof(s), _("%u of %u MB in use"), (unsigned)((mem.swap_total - mem.swap_free) / 1024),
+                     (unsigned)(mem.swap_total / 1024));
+            row = info_row(row, "Swap", s);
+        } else {
+            row = info_row(row, "Swap", "none");    /* the radios' images have none */
+        }
+    } else {
+        row = info_row(row, "Memory", "not known");
+    }
+    row = make_param_switch(row, "Load meter", cfg_sm.p_load_meter);
+    card_end(row);
 }
 
 /* Update: version, the new-release alert, the app update */
+
+/* Where Settings was closed: its tab, the row the knob was on (settings_place.h, #362). Until the radio is off */
+static button_data_t   *last_tab = &btn_general;
+static settings_place_t last_place;
+
+/* The tab opens on the row kept, scrolled as it was and the knob on it as if turned there; a row not found (gone,
+ * hidden, disabled now) leaves the tab at its top */
+static void place_restore() {
+    lv_obj_t *obj = settings_place_find(&last_place, page, keyboard_group);
+
+    if (obj) {
+        lv_obj_update_layout(page);
+        lv_obj_scroll_to_y(page, last_place.scroll_y, LV_ANIM_OFF);
+        if (obj != lv_group_get_focused(keyboard_group)) {
+            /* focus_cb() brings the row into view as for a knob's step. lv_group_focus_obj() runs it before the
+             * FOCUSED event, whose scroll-on-focus then moved the page on by the page's bottom room (16 px under
+             * Display's Spectrum); a step of the knob runs it after, and it has the last word */
+            bool on_focus = lv_obj_has_flag(obj, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+
+            lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+            lv_group_focus_obj(obj);
+            if (on_focus) lv_obj_add_flag(obj, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+            return;
+        }
+    }
+    if (lv_group_get_focused(keyboard_group)) {
+        focus_cb(keyboard_group);
+    }
+}
+
 static void construct_cb(lv_obj_t *parent) {
+    int t = RAIL_N - 1;
+
+    while (t > 0 && tabs[t].btn != last_tab) t--;     /* General when not found */
+
+    buttons_page_t *pg = btn_pages[t / 4];
+
     dialog.obj = dialog_init(parent);
     for (int i = 0; i < 3; i++) {
         btn_pages[i]->items[0]->next = btn_pages[(i + 1) % 3];
     }
     rail_create();
-    /* Brief speech: "Settings, page 1 of 3", as F1 says the pages; the knob reads on from the first row */
-    tabs_hint(param_i_get(cfg_voice_brief) ? "Settings" : "Settings. Tabs on the F-keys", &btn_page, 1, true);
-    tab_press(&btn_general);
+    if (buttons_get_cur_page() != pg) {     /* the tab's own F-keys: open_window() gave the first page's */
+        buttons_unload_page();
+        buttons_load_page(pg);
+    }
+    /* Speech: "Settings, page 3 of 3. Voice tab", then the row kept (place_restore's focus), with Brief speech too:
+     * Settings opens where it was closed, so the tab is named */
+    tabs_hint(param_i_get(cfg_voice_brief) ? "Settings" : "Settings. Tabs on the F-keys", pg, t / 4 + 1, tabs[t].btn);
+    /* Built with no focus callback: the first row is not said, or scrolled to, on its way to the row kept */
+    lv_group_set_focus_cb(keyboard_group, NULL);
+    tab_press(tabs[t].btn);
     lv_group_set_focus_cb(keyboard_group, focus_cb);
+    place_restore();
 }
 
+/* The tab and the row kept before the page goes: the knob's row, or the tab's top while something over the page (the
+ * keyboard, a menu) has the knob */
 static void destruct_cb() {
+    last_tab = cur_tab ? cur_tab : &btn_general;
+    settings_place_get(&last_place, page, keyboard_group, lv_group_get_focused(keyboard_group));
     lv_group_set_focus_cb(keyboard_group, NULL);
     grid_delete();
     lv_group_set_focus_cb(keyboard_group, voice_focus_cb);     /* the group's own again (key_input.c) */

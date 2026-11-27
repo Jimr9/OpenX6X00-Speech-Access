@@ -69,6 +69,7 @@
 #include "ft8/qso.h"
 #include "ft8/decode_list.h"
 #include "ft8/heard.h"
+#include "ft8/row_look.h"
 #include "ft8/time_sync.h"
 #include "ft8/tx_worker.h"
 #include "ft8/utils.h"
@@ -224,6 +225,8 @@ typedef struct {
     uint32_t    win_gen;
 } row_job_t;
 
+static bool      board_on;              /* View: the tiles show, else the traffic (the list); kept while the GUI runs */
+static char      board_sel_call[16];    /* the tile selected, "" none */
 static void lane_update(void);
 static void board_update(void);
 
@@ -236,6 +239,8 @@ static void row_apply(void *arg) {
     if (j->cd.cell_type == CELL_RX_CQ || j->cd.cell_type == CELL_RX_MSG || j->cd.cell_type == CELL_RX_TO_ME) {
         j->cd.new_dxcc = j->cd.cty_prefix[0] && !ft8_worked_has(j->cd.cty_prefix);
         ft8_heard_add(&j->cd, lv_tick_get());
+        /* a call of the station whose tile is selected: seen already, no red */
+        if (board_on && board_sel_call[0] && !strcmp(j->cd.meta.call_de, board_sel_call)) ft8_heard_seen(board_sel_call);
         lane_update();
         board_update();
     }
@@ -269,9 +274,7 @@ static void worked_add_call(const char *call, void *ud) {
 
 static lv_obj_t *lane;
 static lv_obj_t *board;                 /* the tiles, over the hidden list */
-static bool      board_on;              /* View: the tiles show, else the traffic (the list); kept while the GUI runs */
-static char      board_sel_call[16];    /* the tile selected, "" none */
-static lv_timer_t *heard_timer;         /* each second: the red of 3 minutes, the stations of 2 */
+static lv_timer_t *heard_timer;         /* each second: the red of a minute, the stations of 2 */
 
 static lv_coord_t lane_x(float hz) {
     if (filter_high <= filter_low) return 0;
@@ -397,10 +400,10 @@ static void card_show(card_t *c, const ft8_heard_t *st, bool sel) {
     lv_color_t col = TC(text_mute);
 
     switch (ft8_heard_tag(st, now)) {
-        case FT8_TAG_CALLS_YOU:     /* in the text's colour: the tile is red already */
+        case FT8_TAG_CALLS_YOU:     /* in the text's colour: the tile is red already; grey once it is plain */
             if (st->has_report) snprintf(tag, sizeof(tag), _("calls you %+03d"), st->report);
             else snprintf(tag, sizeof(tag), "%s", _("calls you"));
-            col = TC(text);
+            if (fresh) col = TC(text);
             break;
         case FT8_TAG_NEW:
             snprintf(tag, sizeof(tag), "%s", _("NEW"));
@@ -456,7 +459,7 @@ static void tile_say(int k) {
 
     if (!voice_auto_active()) return;
     voice_spell_calls(cd->meta.call_de, call, sizeof(call));
-    if (ft8_heard_calls_you(st, lv_tick_get())) snprintf(what, sizeof(what), "Calling you, ");
+    if (ft8_heard_tag(st, lv_tick_get()) == FT8_TAG_CALLS_YOU) snprintf(what, sizeof(what), "Calling you, ");
     if (cd->country[0] && cd->dist > 0) snprintf(where, sizeof(where), ", %s, %i km", cd->country, cd->dist);
     else if (cd->country[0]) snprintf(where, sizeof(where), ", %s", cd->country);
     voice_delay_say_text_fmt("%s%s%s, %i d B%s%s%s, %i of %i", what, call,
@@ -476,6 +479,7 @@ static void board_move(int step) {
     int k = board_sel >= 0 ? (board_sel + step + board_n) % board_n : 0;
 
     snprintf(board_sel_call, sizeof(board_sel_call), "%s", board_st[k]->cd.meta.call_de);
+    ft8_heard_seen(board_sel_call);     /* selected: seen, the red goes (OlivLoze's fork, 0d1875b4) */
     lv_finder_set_cursor(finder, board_st[k]->cd.meta.freq_hz);
     board_update();
     lane_update();
@@ -513,6 +517,7 @@ static void card_clicked_cb(lv_event_t *e) {
 
     if (k >= board_n) return;
     snprintf(board_sel_call, sizeof(board_sel_call), "%s", board_st[k]->cd.meta.call_de);
+    ft8_heard_seen(board_sel_call);
     board_update();
     lane_update();
     board_call(board_sel >= 0 ? board_sel : k);
@@ -609,7 +614,7 @@ static void build_board(void) {
     lv_obj_add_flag(b, LV_OBJ_FLAG_HIDDEN);
 }
 
-/* Each second: a red tile goes plain 3 minutes after its call, a station 2 minutes after its last row, with no new
+/* Each second: a red tile goes plain a minute after its call, a station 2 minutes after its last row, with no new
  * decode to tell */
 static void heard_timer_cb(lv_timer_t *t) {
     (void)t;
@@ -1203,6 +1208,11 @@ static const char *foryou_label(void) {
     return switch_label(buf, sizeof(buf), "For you", param_i_get(cfg_ft8_foryou));
 }
 
+/* CQ rows: F4OLI's plain rows with a green edge, or the green rows of v0.3.12 (#359) */
+static const char *cq_rows_label(void) {
+    return param_i_get(cfg_ft8_cq_rows) == FT8_CQ_ROWS_FILLED ? "CQ rows:\nFilled" : "CQ rows:\nEdge";
+}
+
 static const char *freq_label(void) {
     static char buf[32];
     if (!params.ft8_custom_on.x) return "Freq:\nPreset";
@@ -1735,10 +1745,18 @@ static void foryou_cb(button_data_t *btn) {
     table_view_pin_clear();
 }
 
+static void cq_rows_cb(button_data_t *btn) {
+    if (kb_open) return;
+    param_i_set(cfg_ft8_cq_rows, param_i_get(cfg_ft8_cq_rows) == FT8_CQ_ROWS_FILLED ? FT8_CQ_ROWS_EDGE
+                                                                                     : FT8_CQ_ROWS_FILLED);
+    lv_obj_invalidate(table_view_obj());    /* the rows drawn again, at once */
+}
+
 static buttons_page_t page_1, page_2, page_3, page_4, page_5;
 
 /* The labels show the state now; a press changes it. F4OLI's pages: operate, the QSO, the band, the tools; then
- * ours that their four left to a hold (Log Map, For you) as buttons of their own. Auto Sync: on the GPS / Clock page */
+ * ours that their four left to a hold (Log Map, For you) as buttons of their own, and CQ rows. Auto Sync: on the
+ * GPS / Clock page */
 static button_data_t button_page_1  = {.type = BTN_TEXT, .label = "(FT8 1:5)", .press = button_next_page_cb, .next = &page_2};
 static button_data_t button_tx_cq   = {.type = BTN_TEXT_FN, .label_fn = tx_cq_label, .press = tx_cq_cb};
 static button_data_t button_tx_call = {.type = BTN_TEXT_FN, .label_fn = tx_call_label, .press = tx_call_cb};
@@ -1765,12 +1783,13 @@ static button_data_t button_live_map = {.type = BTN_TEXT, .label = "Live\nMap", 
 static button_data_t button_page_5  = {.type = BTN_TEXT, .label = "(FT8 5:5)", .press = button_next_page_cb, .next = &page_1};
 static button_data_t button_log_map = {.type = BTN_TEXT, .label = "Log\nMap", .press = map_cb};
 static button_data_t button_foryou  = {.type = BTN_TEXT_FN, .label_fn = foryou_label, .press = foryou_cb};
+static button_data_t button_cq_rows = {.type = BTN_TEXT_FN, .label_fn = cq_rows_label, .press = cq_rows_cb};
 
 static buttons_page_t page_1 = {{&button_page_1, &button_tx_cq, &button_tx_call, &button_show, &button_view}};
 static buttons_page_t page_2 = {{&button_page_2, &button_auto, &button_hold, &button_retries, &button_force}};
 static buttons_page_t page_3 = {{&button_page_3, &button_mode, &button_freq, &button_hound, &btn_dig_pwr}};
 static buttons_page_t page_4 = {{&button_page_4, &button_cq_mod, &button_sync, &button_live_map, &btn_ext_tune}};
-static buttons_page_t page_5 = {{&button_page_5, &button_log_map, &button_foryou}};
+static buttons_page_t page_5 = {{&button_page_5, &button_log_map, &button_foryou, &button_cq_rows}};
 
 /* ---- keyboard window ---- */
 
@@ -2276,6 +2295,7 @@ static void construct_cb(lv_obj_t *parent) {
     button_hold.subj    = (Subject *)cfg_ft8_hold_freq;
     button_auto.subj    = (Subject *)cfg_ft8_auto;
     button_foryou.subj  = (Subject *)cfg_ft8_foryou;
+    button_cq_rows.subj = (Subject *)cfg_ft8_cq_rows;
     button_retries.subj = (Subject *)cfg_ft8_max_repeats;
 
     /* TX CQ starts off each time, TX Call as it was left */

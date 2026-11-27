@@ -65,7 +65,9 @@ extern ParamInt         *cfg_auto_level_enabled; // p_auto_level_enabled
 extern ParamFloat       *cfg_auto_level_offset;  // p_auto_level_offset
 extern ParamInt         *cfg_knob_info;          // p_knob_info
 extern ParamInt         *cfg_buttons_hide;       // p_buttons_hide
+extern ParamText        *cfg_apps_hidden;        // p_apps_hidden
 extern ParamInt         *cfg_knob_press_next;    // p_knob_press_next
+extern ParamInt         *cfg_mfk_rings;          // p_mfk_rings
 extern ParamInt         *cfg_panel_stripes;      // p_panel_stripes
 extern ParamInt         *cfg_mode_from_plan;     // p_mode_from_plan
 extern ParamInt         *cfg_band_region;        // p_band_region
@@ -82,6 +84,7 @@ extern ParamInt         *cfg_walkie_wf;          // p_walkie_wf
 extern ParamInt         *cfg_band_plan;          // p_band_plan
 extern ParamInt         *cfg_wr12;               // p_wr12 (the X6200: the WR12 on HOST)
 extern ParamInt         *cfg_speaker_off;        // p_speaker_off
+extern ParamInt         *cfg_dial_lock;          // p_dial_lock: the user's frequency lock, kept across a restart
 extern ParamInt         *cfg_kbd_layout;         // p_kbd_layout
 extern ParamInt         *cfg_mic_updown;         // p_mic_updown: what the hand mic's UP/DOWN do (mic_updown.h)
 extern ParamInt         *cfg_smeter_needle;      // p_smeter_needle
@@ -127,6 +130,7 @@ extern ParamInt         *cfg_wf_3d_range;        // p_wf_3d_range
 extern ParamText        *cfg_encoder_bind;       // p_encoder_bind
 extern ParamInt         *cfg_power_display;      // p_power_display
 extern ParamInt         *cfg_callsign_show;      // p_callsign_show: the callsign on the main screen (#292)
+extern ParamInt         *cfg_freq_one_dot;       // p_freq_one_dot: 14.074000 on the main screen (#344)
 
 // VOX
 extern ParamInt *cfg_vox_on;   // p_vox_en
@@ -140,6 +144,7 @@ extern ParamInt *cfg_ft8_protocol;   // p_ft8_protocol
 extern ParamInt *cfg_ft8_auto;       // p_ft8_auto
 extern ParamInt *cfg_ft8_hold_freq;  // p_ft8_hold_freq
 extern ParamInt *cfg_ft8_foryou;     // p_ft8_foryou
+extern ParamInt *cfg_ft8_cq_rows;    // p_ft8_cq_rows: CQ rows Edge / Filled (#359)
 extern ParamInt *cfg_ft8_auto_sync;  // p_ft8_auto_sync
 extern ParamInt *cfg_wspr_tx_pct;    // p_wspr_tx_pct
 extern ParamInt *cfg_spot_snap_hold; // p_spot_snap_hold
@@ -172,6 +177,7 @@ extern ParamInt *cfg_dmr_tg;         // p_dmr_tg
 extern ParamInt *cfg_field_boot;     // p_field_boot
 extern ParamInt *cfg_field_respot;   // p_field_respot
 extern ParamInt *cfg_voice_msg_gain; // p_voice_msg_gain
+extern ParamInt *cfg_bt_mic_gain;    // p_bt_mic_gain
 // Spoken feedback (voice.cpp)
 extern ParamInt *cfg_voice_mode;     // p_voice_mode: 0 Off, 1 screen dark, 2 Always
 extern ParamInt *cfg_voice_lang;     // p_voice_lang: voice_item[]
@@ -249,6 +255,8 @@ extern ParamFloat *cfg_cessb_power_up;       // p_cessb_power_up
 // Text log of the keyboard modes
 extern ParamInt   *cfg_textlog;              // p_textlog
 extern ParamInt   *cfg_textlog_mb;           // p_textlog_mb
+extern ParamInt   *cfg_card_space_warn;      // p_card_space_warn
+extern ParamInt   *cfg_load_meter;           // p_load_meter
 
 // The first-start guide had
 extern ParamInt   *cfg_first_start_done;     // p_first_start_done

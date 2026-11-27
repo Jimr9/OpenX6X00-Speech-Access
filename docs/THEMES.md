@@ -75,10 +75,16 @@ Every key is optional: what a file does not set comes from its `base`.
 | `codec` | the S-meter as a SIGNAL bar: a framed row of segments, red above S9, the peak bright, the S scale under it and the dB value top right (themes/Codec); in TX the TX readings, as in any theme. Settings > Display > S-meter type and S-meter colours have no effect under it |
 | `ops_room` | the Ops Room theme's own pieces: a red band with TRANSMIT and ON AIR across the main screen under the TX panel while the radio transmits (not over an app: the app shows the TX its own way); the time in 7-segment digits between INTERNAL/EXTERNAL and the battery %, the battery's time left as LIMIT under it (TO FULL on a supply, the supply's voltage without a battery); the S-meter as a row of SIGNAL hexagons, its value or TX over them. Settings > Display > Power display, S-meter type and S-meter colours have no effect under it |
 
-The encoder LED shows which encoder a button's control is on (`btn_mark`,
-`btn_mark_assigned`); the control the encoder adjusts now is `btn_mark_active`
-(red in the built-in themes). Pressing a button or turning to another control
-moves it.
+The encoder LED shows which encoder a button's control is on, or would go on
+at a press of the button: `btn_mark` for VOL and `info` for the MFK when a
+press would put it there, `btn_mark_assigned` when it is bound to the knob
+(half see-through unless `focus_solid`). The control the encoder adjusts now
+is `btn_mark_active`: red in the built-in themes, cyan in Black Metal and
+Total Black, 1bit a bar twice as wide. Keep it apart from the other three: on
+a page of MFK controls every button has a mark. Where `info` is the same
+colour as `btn_mark_active` the MFK's plain mark takes `btn_mark` instead
+(Black Metal and Total Black: grey lines, the one in use cyan; issue #340).
+Pressing a button or turning to another control moves it.
 
 ## Images
 
@@ -135,7 +141,8 @@ The authoritative list, with the value of each built-in theme, is
   `tune_good`, `bp_cw`, `bp_dig`, `bp_ssb`, `bp_bcn`, `bp_out`, `bp_text`, `finder_band`, `finder_cursor`
 - Categories: `pill_hp`, `pill_cat`, `pill_cat_text`, `pill_kbd`, `pill_kbd_text` (Bluetooth devices), `age_mid`,
   `age_old` (cluster spots), `row_alert`, `row_alert_text`, `row_heard`, `row_tx`, `row_to_me`, `row_cq`,
-  `row_group`, `row_sel_bar` (JS8), `ft8_cq`, `ft8_cq_worked`, `ft8_cq_same`, `ft8_to_me`, `ft8_tx` (FT8)
+  `row_group`, `row_sel_bar` (JS8), `ft8_cq`, `ft8_cq_worked`, `ft8_cq_same`, `ft8_to_me`, `ft8_tx` (FT8; the three
+  `ft8_cq` ones are the CQ rows' green with FT8's CQ rows: Filled)
 - Screensaver: `saver_bg` (its ground, black in every built-in theme), `saver` (the Matrix rain's trail, fading into
   the ground at its end), `saver_head` (the head of each column)
 

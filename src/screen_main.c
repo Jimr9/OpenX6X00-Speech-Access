@@ -49,6 +49,8 @@
 #include "freq_entry.h"
 #include "cw_messages.h"
 #include "cw_encoder.h"
+#include "charger_step.h"
+#include "dial_lock.h"
 #include "dialog_cw_kbd.h"
 #include "winlink_mail.h"
 #include "voice_messages.h"
@@ -114,6 +116,8 @@
 #include "control_owner.h"
 #include "kbd_hyper.h"
 #include "kbd_ptt.h"
+#include "audio.h"
+#include "btaudio.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -147,15 +151,31 @@ static uint32_t     wf_block_at;            /* and the place the first one had a
 static lv_obj_t    *wf_tag_box, *wf_tag;
 static bool         on_air;                 /* rx_tx_cb(): the radio transmits */
 
+/* The decoder's text over the whole screen (#352): the panel of the CW decoder and of RTTY (text_panel.cpp), which
+ * otherwise has the lower part of the screen over the waterfall. The same key as the full-screen waterfall, held DFL
+ * out of the box: with the text on the screen it goes on from the waterfall to the text, and from the text back (in
+ * RTTY, where the waterfall is never full screen, straight to the text). A plain backdrop comes in front of all the
+ * rest, the panel over it from under a top line to the bottom, and over them the waterfall's tag with the frequency
+ * and the mode, at the top right here: red with TX before them, and the red frame around the screen, while the radio
+ * transmits (the paddle, RTTY's macros from a keyboard). CW's speed keeps its place over the panel, RTTY's scope its
+ * corner. Left as the waterfall's: F1-F5, a tap of a key of the buttons, the key again, an app or a window opening;
+ * and when the text goes (the decoder off, another mode, RTTY closed) or a line is typed to send */
+#define TEXT_FULL_TOP   44      /* the top line: the tag, CW's speed */
+
+static bool         text_full;
+static lv_obj_t    *text_full_bg;
+
 static void wf_full_set(bool on);
+static void text_full_set(bool on);
 static void wf_tag_update(void);
 
 /* What an open app keeps the keys from changing. The frequency lock is a subject: the scale
  * greys out with it. It is on while either holds it: the user's lock (LOCK, SPCH, Scroll Lock, the Panel's LOCK,
  * a key given Frequency lock in Settings > Keys), shown by LOCK in the frequency strip, or an open app's hold, which
- * ends with the app and leaves the user's lock as it was */
+ * ends with the app and leaves the user's lock as it was. The user's lock is kept across a restart, an app's hold
+ * never (dial_lock.h, #342) */
 static SubjectInt   *freq_lock;
-static bool         user_lock, app_lock;
+static dial_lock_t  dial;
 static bool         band_lock, mode_lock, ab_lock;
 static press_action_t last_app;     /* the app opened last: a digital one while radio_digi_cap() */
 
@@ -174,18 +194,22 @@ static bool cw_mode(void) {
 
 /* The scale and the frequency strip follow the subject */
 static void freq_lock_update(void) {
-    subject_i_set(freq_lock, user_lock || app_lock);
-    freq_strip_set_lock(user_lock);
+    subject_i_set(freq_lock, dial_lock_on(&dial));
+    freq_strip_set_lock(dial.user);
 }
 
+/* The user's lock, and the setting that brings it back at the next start: written here only, so with the user's
+ * lock alone */
 static void set_user_lock(bool lock) {
-    user_lock = lock;
+    dial.user = lock;
+    if (param_i_get(cfg_dial_lock) != dial_lock_saved(&dial))
+        param_i_set(cfg_dial_lock, dial_lock_saved(&dial));
     freq_lock_update();
 }
 
 static bool toggle_freq_lock(void) {
-    set_user_lock(!user_lock);
-    return user_lock;
+    set_user_lock(!dial.user);
+    return dial.user;
 }
 
 static void say_lock(bool on) {
@@ -543,6 +567,20 @@ static void say_state(const char *what, const char *state) {
     msg_update_text_fmt("#%06x %s: %s", theme_hex(TC_text), what, state);
 }
 
+/* Settings > General > CONTROLS > Charger to its next state, Off, On, Shadow and round, as that row does it: the
+ * setting, and the base told at once (charger_step.h, #276) */
+_Static_assert(ACTION_CHARGER == 26 && ACTION_VOICE_REPEAT == 24, "the actions' values are in users' settings: appended, never renumbered");
+_Static_assert(RADIO_CHARGER_OFF == CHARGER_STEP_OFF && RADIO_CHARGER_ON == CHARGER_STEP_ON &&
+               RADIO_CHARGER_SHADOW == CHARGER_STEP_SHADOW, "charger_step.h steps radio_charger_t's states");
+
+static void charger_step(void) {
+    int next = charger_step_next(params.charger.x);
+
+    params_uint8_set(&params.charger, next);
+    radio_set_charger(charger_step_charges(next));
+    say_state("Charger", charger_step_name(next));
+}
+
 static bool toggle_atu(void) {
     bool on = !param_i_get(cfg_atu_enabled);
 
@@ -649,6 +687,7 @@ static const char *app_name(press_action_t a) {
  * digital audio path, the panel */
 static void close_apps(void) {
     wf_full_set(false);     /* an app coming, the buttons asked for, a new theme: the normal screen */
+    text_full_set(false);
     dialog_destruct();
     freq_strip_set_app(NULL);
     if (rtty_get_state() != RTTY_OFF) {
@@ -802,6 +841,7 @@ void main_screen_action(press_action_t action) {
         case ACTION_ATU_TUNE:       radio_start_atu(); break;   /* as a long press of the ATU key */
         case ACTION_EXT_TUNE:       ext_tune_toggle(); break;   /* an external tuner's: started, or stopped */
         case ACTION_FREQ_LOCK:      say_lock(toggle_freq_lock()); break;
+        case ACTION_CHARGER:        charger_step(); break;
         case ACTION_VOICE_MODE:     voice_change_mode(); break;
         case ACTION_VOICE_REPEAT:   voice_repeat_last(); break;
         case ACTION_VOICE_FKEYS: {  /* what this page's F keys hold, asked for: said even with Brief speech */
@@ -1003,6 +1043,78 @@ static bool ptt_key(keypad_state_t state) {
     return ok;
 }
 
+/* The PTT key on the radio's side with a headset hands-free on a USB Bluetooth dongle (Settings > Bluetooth > USB
+ * dongle, btaudio-ctl; from OlivLoze's fork, F4OLI): the headset's mic on the air, through the modem as an app's audio
+ * goes (audio_mic_bt_begin), with the screen saying "TX: MIC BT". The hand mic's PTT keys the base with the hand mic as
+ * before, and in CW the key keys the carrier as before. Let go at the release, not at the long press (the key still
+ * held), or when the headset goes away or the modem is let go another way (the SWR protection, the band's end):
+ * mic_tick_cb */
+#define MIC_TICK_MS 100
+
+static bool        mic_tx;
+static lv_timer_t *mic_timer;
+
+static void mic_ptt_end(void) {
+    if (!mic_tx) {
+        return;
+    }
+    mic_tx = false;
+    radio_set_modem(false);
+    audio_mic_bt_end();
+    if (mic_timer) {
+        lv_timer_del(mic_timer);
+        mic_timer = NULL;
+    }
+}
+
+static void mic_tick_cb(lv_timer_t *t) {
+    if (audio_mic_bt_lost()) {
+        mic_ptt_end();
+        msg_update_text_fmt("PTT off: the headset is gone");
+    } else if (!radio_get_modem()) {
+        mic_ptt_end();
+    }
+}
+
+/* The press: true when the headset took it, keyed or not */
+static bool mic_ptt_press(void) {
+    char src[128];
+
+    if (cw_mode() || !btaudio_mic_source(src, sizeof(src))) {
+        return false;
+    }
+    dialog_msg_voice_ptt_pressed();
+    cw_encoder_ptt_pressed();
+    if (mic_tx || radio_get_modem()) {      /* an app on the air (FT8, a voice message): its TX, not cut short */
+        return true;
+    }
+    if (!audio_mic_bt_begin(src)) {
+        msg_update_text_fmt("Headset mic busy");
+        return true;
+    }
+    radio_set_modem(true);
+    if (!radio_get_modem()) {               /* refused where the radio may not transmit, which says why */
+        audio_mic_bt_end();
+        return true;
+    }
+    mic_tx    = true;
+    mic_timer = lv_timer_create(mic_tick_cb, MIC_TICK_MS, NULL);
+    msg_update_text_fmt("TX: MIC BT");
+    return true;
+}
+
+static void side_ptt_key(keypad_state_t state) {
+    if (state == KEYPAD_PRESS) {
+        if (!mic_ptt_press()) {
+            ptt_key(state);
+        }
+    } else if ((state == KEYPAD_RELEASE || state == KEYPAD_LONG_RELEASE) && mic_tx) {
+        mic_ptt_end();
+    } else {
+        ptt_key(state);
+    }
+}
+
 /* A/B, the front key and the H-22's: VFO A/B; long: this VFO copied to the other one. Not while an app holds the
  * VFOs */
 static void ab_key(bool tap, bool hold) {
@@ -1068,8 +1180,8 @@ static void hide_arm(void) {
 bool main_screen_buttons_wake(void) {
     bool was = buttons_hidden();
 
-    if (wf_full) {
-        return false;       /* under the full-screen waterfall: they come back when it goes (wf_full_set()) */
+    if (wf_full || text_full) {
+        return false;       /* under the full-screen waterfall or text: they come back when it goes (wf_full_set()) */
     }
 
     buttons_hide(false);
@@ -1101,14 +1213,18 @@ static void front_key_cb(lv_event_t *e) {
      * as with the buttons hidden; a key of the buttons on its tap, as its long press may be the one that goes back
      * (over a page of its own group that page stays, as with the buttons hidden). The other keys do their work
      * under it */
-    if (wf_full && ev->state == KEYPAD_PRESS && ev->key >= KEYPAD_F1 && ev->key <= KEYPAD_F5) {
+    bool full = wf_full || text_full;       /* the decoder's text full screen (#352): left the same way */
+
+    if (full && ev->state == KEYPAD_PRESS && ev->key >= KEYPAD_F1 && ev->key <= KEYPAD_F5) {
         wf_full_set(false);
+        text_full_set(false);
         woke_key = ev->key;
-    } else if (wf_full && tap && (key_group(ev->key) || ev->key == KEYPAD_MSG)) {
+    } else if (full && tap && (key_group(ev->key) || ev->key == KEYPAD_MSG)) {
         if (key_group(ev->key) && buttons_group_shown(key_group(ev->key))) {
             woke_group = ev->key;
         }
         wf_full_set(false);
+        text_full_set(false);
     }
     woke = main_screen_buttons_wake();
     if (woke && ev->state == KEYPAD_PRESS && ev->key >= KEYPAD_F1 && ev->key <= KEYPAD_F5) {
@@ -1237,7 +1353,7 @@ static void front_key_cb(lv_event_t *e) {
              * radio; a release goes where its press went, so the radio's own press is let go even if the app opened
              * meanwhile (voice_ptt.h) */
             if (!vnet_ptt_key(ev->state)) {
-                ptt_key(ev->state);
+                side_ptt_key(ev->state);
             }
             break;
 
@@ -1742,6 +1858,7 @@ static void spectrum_key_cb(lv_event_t *e) {
         if (cw_field_visible()) {
             wf_full_set(false);     /* the line being typed is under the full-screen waterfall */
         }
+        text_full_set(false);       /* or under the text: CW's line, RTTY's window */
         return;
     }
     switch (key) {
@@ -1969,7 +2086,7 @@ void main_screen_chord(int action) {
 
 /* An app's hold */
 void main_screen_lock_freq(bool lock) {
-    app_lock = lock;
+    dial.app = lock;
     freq_lock_update();
 }
 
@@ -1979,11 +2096,11 @@ void main_screen_user_lock_freq(bool lock) {
 }
 
 bool main_screen_freq_user_locked(void) {
-    return user_lock;
+    return dial.user;
 }
 
 bool main_screen_freq_app_locked(void) {
-    return app_lock;
+    return dial.app;
 }
 
 void main_screen_lock_band(bool lock) {
@@ -2042,7 +2159,7 @@ static void on_freq_change(Subject *subj, void *user_data) {
     }
     split_freq(shown_freq(), &mhz, &khz, &hz);
     if (mhz < 100) {
-        msg_tiny_set_text_fmt("%i.%03i.%03i", mhz, khz, hz);
+        msg_tiny_set_text_fmt("%i.%03i%s%03i", mhz, khz, freq_strip_dot(), hz);
     } else {
         msg_tiny_set_text_fmt("%i.%03i", mhz, khz);    /* VHF and up: no Hz */
     }
@@ -2206,11 +2323,12 @@ static void on_spectrum_layout_change(Subject *subj, void *user_data) {
 static void wf_tag_update(void) {
     uint16_t mhz, khz, hz;
 
-    if (!wf_full) {
+    if (!wf_full && !text_full) {
         return;
     }
     split_freq(shown_freq(), &mhz, &khz, &hz);
-    lv_label_set_text_fmt(wf_tag, "%s%i.%03i.%03i %s", on_air ? "TX " : "", mhz, khz, hz, info_params_mode_label_get());
+    lv_label_set_text_fmt(wf_tag, "%s%i.%03i%s%03i %s", on_air ? "TX " : "", mhz, khz, freq_strip_dot(), hz,
+                          info_params_mode_label_get());
     lv_obj_set_style_bg_color(wf_tag, on_air ? TC(tx_bg) : TC(chip), 0);
     lv_obj_set_style_border_color(wf_tag, on_air ? TC(tx) : TC(bar_border), 0);
     lv_obj_set_style_border_width(wf_tag_box, on_air ? 4 : 0, 0);
@@ -2240,6 +2358,15 @@ static void wf_tag_init(void) {
     lv_obj_set_style_pad_ver(wf_tag, 3, 0);
     lv_label_set_text(wf_tag, "");
     lv_obj_align(wf_tag, LV_ALIGN_BOTTOM_LEFT, 8, -28);
+
+    /* What the decoder's text lies on when it has the whole screen (text_full_set()) */
+    text_full_bg = lv_obj_create(obj);
+    lv_obj_remove_style_all(text_full_bg);
+    lv_obj_set_size(text_full_bg, BOARD_DISP_W, BOARD_DISP_H);
+    lv_obj_set_style_bg_color(text_full_bg, TC(bg), 0);
+    lv_obj_set_style_bg_opa(text_full_bg, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(text_full_bg, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(text_full_bg, LV_OBJ_FLAG_HIDDEN);
 }
 
 /* The full-screen waterfall on or off (see wf_full) */
@@ -2248,6 +2375,7 @@ static void wf_full_set(bool on) {
         return;
     }
     if (on) {
+        text_full_set(false);   /* one or the other */
         wf_block = malloc(wf_block_n * sizeof(*wf_block));
         if (!wf_block) {
             return;
@@ -2281,19 +2409,78 @@ static void wf_full_set(bool on) {
     wf_tag_update();
 }
 
-void main_screen_wf_full_end(void) {
-    wf_full_set(false);
+/* The decoder's text over the whole screen, or back (see text_full). Only while its panel is on the screen */
+static void text_full_set(bool on) {
+    if (on == text_full || !text_full_bg || (on && !panel_shown())) {
+        return;
+    }
+    if (on) {
+        wf_full_set(false);     /* one or the other */
+        lv_obj_move_foreground(text_full_bg);
+        lv_obj_clear_flag(text_full_bg, LV_OBJ_FLAG_HIDDEN);
+        text_full = true;
+        panel_set_full(true, TEXT_FULL_TOP, BOARD_DISP_H - TEXT_FULL_TOP - TOP_BAR_MARGIN);
+        lv_obj_move_foreground(wf_tag_box);
+        lv_obj_clear_flag(wf_tag_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(wf_tag, LV_ALIGN_TOP_RIGHT, -8, 4);
+        buttons_hide(true);     /* as under the full-screen waterfall */
+        knobs_cover(true);
+    } else {
+        text_full = false;
+        panel_set_full(false, 0, 0);
+        panel_keep_below(wf_y - 8);
+        lv_obj_add_flag(text_full_bg, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(wf_tag_box, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(wf_tag, LV_ALIGN_BOTTOM_LEFT, 8, -28);     /* where the waterfall has it */
+        knobs_cover(false);
+        main_screen_buttons_wake();
+    }
+    wf_tag_update();
 }
 
-/* The key given it (say: a word when it cannot), or a touch held on the waterfall. Going back is always allowed */
+void main_screen_wf_full_end(void) {
+    wf_full_set(false);
+    text_full_set(false);
+}
+
+void main_screen_text_full_end(void) {
+    text_full_set(false);
+}
+
+/* The key given it (say: a word when it cannot), or a touch held on the waterfall. Going back is always allowed.
+ * With the decoder's text on the screen (CW's decoder, RTTY) the key goes on to the text over the whole screen
+ * before it goes back (#352): the waterfall, the text, the normal screen; in RTTY, where the waterfall is never
+ * full screen, the text and back */
 static void wf_full_toggle(bool say) {
-    if (!wf_full && (dialog_is_run() || rtty_get_state() != RTTY_OFF || walkie_on())) {
+    bool app = dialog_is_run() || walkie_on();
+
+    /* Speech: the screen it went to, as nothing else says it (the F keys hide, the knobs' values cover them) */
+    if (text_full) {
+        text_full_set(false);
+        if (!text_full) voice_say_text_fmt("Normal screen");
+        return;
+    }
+    if (wf_full) {
+        wf_full_set(false);
+        if (!app) {
+            text_full_set(true);    /* nothing without the panel */
+        }
+        voice_say_text_fmt("%s", text_full ? "Full screen text" : "Normal screen");
+        return;
+    }
+    if (!app && rtty_get_state() != RTTY_OFF && panel_shown()) {
+        text_full_set(true);
+        if (text_full) voice_say_text_fmt("Full screen text");
+        return;
+    }
+    if (app || rtty_get_state() != RTTY_OFF) {
         if (say && !walkie_on()) {
             msg_update_text_fmt("Full screen: not over an app");
         }
         return;
     }
-    wf_full_set(!wf_full);
+    wf_full_set(true);
+    if (wf_full) voice_say_text_fmt("Full screen waterfall");
 }
 
 /* A touch (the PC build's mouse) held on the waterfall, where no other touch does anything. The knobs' long presses
@@ -2317,7 +2504,10 @@ lv_obj_t * main_screen() {
     channels_load();    /* creates channels.json with the defaults when missing */
     lv_timer_create(channels_poll_cb, 2000, NULL);
 
-    freq_lock = subject_i_create(false);
+    /* The user's lock as the radio was switched off with it (#342): LOCK in the frequency strip from the start */
+    dial_lock_start(&dial, param_i_get(cfg_dial_lock));
+    freq_lock = subject_i_create(dial_lock_on(&dial));
+    freq_strip_set_lock(dial.user);
     obj = lv_obj_create(NULL);
 
     /* The input devices and the radio send their events to the screen */
@@ -2424,6 +2614,7 @@ static void build(void) {
     subject_subscribe_delayed((Subject*)cfg_bg_freq, on_wf_tag_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_band_split, on_wf_tag_change, NULL);
     subject_subscribe_delayed((Subject*)cfg_cur_mode, on_wf_tag_change, NULL);
+    subject_subscribe_delayed((Subject*)cfg_freq_one_dot, on_wf_tag_change, NULL);     /* 14.074000 (#344) */
 
     /* The order counts: these run in it when several change at once */
     subject_subscribe_delayed((Subject*)freq_lock, on_freq_change, NULL);

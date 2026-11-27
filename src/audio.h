@@ -85,11 +85,20 @@ bool audio_listen_resume(audio_user_t u, int quiet_ms);
 int audio_listen_play(audio_user_t u, const int16_t *buf, size_t samples, bool (*go_on)(void), int timeout_ms);
 void audio_listen_end(audio_user_t u);
 void audio_listen_cut(void);
+/* After a play: about how many ms from now what it wrote last is heard; -1 when none of it is (no stream, a key cut
+ * it, a voice link holds the speaker). For the S-meter's audio level (smeter.h, #360) */
+int audio_listen_delay_ms(audio_user_t u);
 
 /* Short-delay playback into the codec for the phone's voice, from the playing thread (see audio.c) */
 bool audio_play_lowlat_begin(void);
 void audio_play_lowlat_end(void);
 bool audio_play_if_room(int16_t *buf, size_t samples);
+
+/* A headset's mic into the codec while the modem is keyed (its PulseAudio source, btaudio_mic_source), from the side
+ * PTT key; lost: the headset went away meanwhile (see audio.c). LVGL thread */
+bool audio_mic_bt_begin(const char *source);
+void audio_mic_bt_end(void);
+bool audio_mic_bt_lost(void);
 
 void audio_gain_db(int16_t *buf, size_t samples, float gain, int16_t *out);
 void audio_gain_db_transition(int16_t *buf, size_t samples, float gain1, float gain2, int16_t *out);

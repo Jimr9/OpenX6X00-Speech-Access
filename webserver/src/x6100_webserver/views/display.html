@@ -131,7 +131,8 @@ const CARDS = [
     ["freq_step_lo", "Tuning steps from", "The smallest tuning step FST, a keyboard's + and _ and a knob's Step go to; FST goes round from the largest back to it", "sel", ["10 Hz", "100 Hz", "500 Hz", "1 kHz", "5 kHz", "10 kHz", "25 kHz", "100 kHz"]],
     ["freq_step_hi", "Tuning steps to", "The largest tuning step FST, a keyboard's + and _ and a knob's Step go to; FST goes round from it back to the smallest", "sel", ["10 Hz", "100 Hz", "500 Hz", "1 kHz", "5 kHz", "10 kHz", "25 kHz", "100 kHz"]],
     ["power_display", "Power display", "The box at the top right: the battery's charge with the time left or to full, the battery's and the supply's voltages, the two in turn every 5 s, or the charge with the supply's voltage", "sel", ["% + time", "Volts", "Alternate", "% + V"]],
-    ["callsign_show", "Callsign", "Your callsign (Settings → General → STATION) small on the main screen: in front of the locator in the frequency strip, hidden while a split needs the room; Black Metal and Total Black: in the second row at the top, before the battery; Amber Trey: under the display. On the boot logo too, from the next start", "sw"],
+    ["callsign_show", "Callsign", "Your callsign (Settings → General → STATION) small on the main screen: in front of the locator in the frequency strip, hidden while a split needs the room; Black Metal and Total Black: in the second row at the top after BW IF STEP, with the locator beside it (a green dot while it is the GPS's); Amber Trey: under the display. On the boot logo too, from the next start", "sw"],
+    ["freq_one_dot", "Frequency", "How the main screen writes a frequency: with a point after the kHz too, or as one decimal number in MHz. The frequency strip with the other VFO, the tag over the full-screen waterfall, the big frequency, the TX panel's line, the walkie screen and the VFO lines of the cluster and list windows", "sel", ["14.074.000", "14.074000"]],
     ["cw_tune_place", "CW tune and WPM", "In CW: the CW Tuner's bars and the decoder's speed over the spectrum, or in the frequency strip between the band and the frequency, smaller where it has less room; back on the spectrum while the strip has no room (a split with LOCK on) or a window is open; Black Metal, Total Black and Amber Trey keep them where they are", "sel", ["Spectrum", "Frequency strip"]],
     ["clock_12h", "12-hour clock", "The time at the top right as 1:05 PM; off: 13:05", "sw"],
     ["icon_menus", "Icon menus", "APP, Modes and the Settings rail as grids of icons; off: the old text menus", "sw"],
@@ -139,6 +140,7 @@ const CARDS = [
     ["buttons_hide", "Hide buttons", "The main screen's five buttons and the knob lines over them hidden after so long without a key, the waterfall down to the bottom; any key brings them back, F1-F5 only that", "seg", ["Off", "3 s", "5 s", "10 s"]],
     ["knob_lines_stay", "Keep knob lines", "With Hide buttons on: the two knob lines stay where they are when the buttons hide, so VOL and the MFK show their control and value there, not on the message line", "sw"],
     ["knob_press_next", "Knob press: next control", "A short press of VOL or the MFK takes the next control on its list, ready to turn, as the stock firmware does; a long press switches between changing the value and choosing the control (on the cluster column it tunes to the spot). Off: a press does that switch", "sw"],
+    ["mfk_rings", "MFK rings", "The X6200's lower knob has two rings. Stock: the outer ring is the MFK (it changes the value or chooses the control, and walks lists and menus) and the inner ring steps the MFK's control. Swapped: the inner ring is the MFK and the outer ring steps the control", "seg", ["Stock", "Swapped"]],
     ["digi_text_compact", "Decoder text", "CW and RTTY text: large, or compact with more lines", "seg", ["Large", "Compact"]],
     ["mag_freq", "Magnify frequency", "Big frequency while tuning", "sw"],
     ["mag_info", "Magnify info", "A short note when a key switches the VFO, split, the AGC, PRE, ATT or the ATU", "sw"],
@@ -371,6 +373,46 @@ var ownList = function() {
   return box;
 }
 
+/* The apps of the radio's APP menu (Settings → Apps, #351): D.apps is [name in the setting, name, 1 hidden] for each
+ * app that can be hidden, as the radio has them, so an app a later version brings is here without a change. A switch
+ * each, on for shown; Show all brings every one back */
+var appsHidden = function() {
+  const n = D.apps.filter(function(a) { return a[2]; }).length;
+  return n ? n + " hidden" : "None hidden";
+}
+
+var appsCard = function() {
+  const card = $("<section class='dp-card' id='apps'>");
+  card.append($("<div class='dp-head'>").append($("<div class='dp-ico' aria-hidden='true'>").html(ICONS.layers),
+    $("<div>").append($("<h3>").text("Apps"), $("<p>").text("The apps in the radio's APP grid and on its APP button pages"))));
+  const count = $("<span>").text(appsHidden());
+  const all = $("<button type='button'>").text("Show all").on("click", function() {
+    rowState("apps_show_all", "saving");
+    send({name: "apps_show_all", val: 1}, function() {
+      D.apps.forEach(function(a) { a[2] = 0; $("#opt-app-" + a[0]).prop("checked", true); });
+      count.text(appsHidden());
+      rowState("apps_show_all", "applied");
+    }, function(msg) { rowState("apps_show_all", "failed", msg); });
+  });
+  card.append($("<div class='dp-row'>").attr("id", "row-apps_show_all").append(
+    $("<div class='dp-lbl'>").append($("<b>").text("Hidden apps"), count,
+      $("<span>").text("Off takes an app out of the APP grid and the APP pages, the others close up. A key given to it in Settings → Keys still opens it, and an app that is running goes on. Settings is always shown.")),
+    $("<div class='dp-ctl'>").append(all)));
+  D.apps.forEach(function(a) {
+    const row = "app-" + a[0], box = $("<label class='sw'>").attr("title", a[1]);
+    $("<input type='checkbox' role='switch'>").attr({id: "opt-" + row, "aria-label": a[1]}).prop("checked", !a[2])
+      .on("change", function() {
+        const el = this, hide = el.checked ? 0 : 1;
+        rowState(row, "saving");
+        send({name: "app_hide", app: a[0], val: hide}, function() { a[2] = hide; count.text(appsHidden()); rowState(row, "applied"); },
+             function(msg) { el.checked = !a[2]; rowState(row, "failed", msg); });
+      }).appendTo(box);
+    card.append($("<div class='dp-row'>").attr("id", "row-" + row).append(
+      $("<div class='dp-lbl'>").append($("<b>").text(a[1])), $("<div class='dp-ctl'>").append(box.append("<i></i>"))));
+  });
+  return card;
+}
+
 var render = function() {
   const cards = $("#cards").empty();
   CARDS.forEach(function(c) {
@@ -389,6 +431,7 @@ var render = function() {
     if (c[4] === "ranges" && "tx_ranges" in D) card.append(ownList());
     cards.append(card);
   });
+  if (Array.isArray(D.apps) && D.apps.length) cards.append(appsCard());
   refresh();
   showStatus("Read from the radio");
 }

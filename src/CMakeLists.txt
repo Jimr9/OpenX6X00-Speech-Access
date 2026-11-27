@@ -3,16 +3,16 @@
 add_executable(${PROJECT_NAME})
 
 target_sources(${PROJECT_NAME} PUBLIC
-    gui_main.c gui_wake.c ops_room.c perf_hud.c screen_main.c walkie.c gui_styles.c dropdown_fit.c mono.c wf_palettes.c
+    gui_main.c gui_wake.c ops_room.c perf_hud.c load_meter.c load_stat.c screen_main.c walkie.c gui_styles.c dropdown_fit.c mono.c wf_palettes.c
     spectrum_view.c radio.c dsp.cpp util.cpp
-    waterfall_view.c knob_device.c key_input.c input_caps.c mfk_device.c
+    waterfall_view.c knob_device.c key_input.c input_caps.c evdev_sync.c mfk_device.c
     gui_events.c msg_box.c msg_note.c front_keys.c kbd_rollover.c kbd_hyper.c kbd_keymap.c kbd_layout.c kbd_ptt.c
-    mic_keys.c clock.c bat_est.c bat_watch.c info_bar.c smeter.c
+    mic_keys.c clock.c bat_est.c bat_watch.c info_bar.c smeter.c audio_meter.c
     band_names.cpp tx_meters.c
     audio.c audio_owner.c mfk_control.cpp cw.cpp cw_decoder.c cw_parse.c text_panel.cpp
     rtty.c rtty_tx.c rtty_send.c rtty_macro.c screen_shot.c screen_rec.c avi_writer.c screen_light.c screen_idle.c screen_saver.c gps.c
     cat.cpp tci_ws.c tci_audio.c tci_server.c tci_ask.c cfg_socket.cpp wavelog_cat.c
-    app_window.c settings_window.cpp swrscan_window.c ft8_window.c
+    app_window.c settings_window.cpp settings_place.c swrscan_window.c ft8_window.c
     freq_entry.c gps_window.c cw_messages.c
     voice_messages.c recorder_window.c qth_entry.c station.c dialog_channels.c
     js8_window.c js8_map.c map_geo.c ghostnet.c ghostnet_gui.c ghostnet_tr.c
@@ -66,7 +66,7 @@ target_sources(${PROJECT_NAME} PUBLIC
     navtex_window.c navtex/sitorb.c navtex/dsc.c
     dialog_freedv.c freedv_rx.c freedv_text.c freedv_tx.c
     channel_list.c broadcast_db.c cJSON.c
-    text_popup.c cw_encoder.c image_level.c start_trace.c
+    text_popup.c cw_encoder.c image_level.c start_trace.c card_space.c card_space_notice.c
     cw_beacon.c
     button_bar.cpp button_page.c vol_control.cpp recorder.c
     cw_tune_view.c adif.c qso_log.c scheduler.cpp

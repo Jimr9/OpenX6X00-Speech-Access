@@ -53,8 +53,10 @@ typedef enum {
     ACTION_SWL_PANEL,   /* appended after CW_ZAP: the SWL panel, again the next station, as the X6100 mic's GENE (#155) */
     ACTION_SWL_SAVE,    /* the station the SWL panel shows saved as a channel, as the X6100 mic's NW (#155) */
     ACTION_WF_FULL,     /* appended after SWL_SAVE: the waterfall over the whole main screen, or back (#302) */
-    ACTION_VOICE_REPEAT, /* appended after WF_FULL, speech: the last announcement again; GEN held by default */
-    ACTION_VOICE_FKEYS,  /* speech: what F1 to F5 hold on this page; KEY held by default */
+    ACTION_VOICE_REPEAT, /* 24, appended after WF_FULL, speech: the last announcement again; GEN held by default */
+    ACTION_VOICE_FKEYS,  /* 25, speech: what F1 to F5 hold on this page; KEY held by default */
+    ACTION_CHARGER,     /* 26 in this speech fork (24 upstream), so that the speech releases' saved 24 and 25 keep
+                         * their meaning: the Charger setting to its next state, Off, On, Shadow (#276) */
 
     ACTION_APP_RTTY = 100,
     ACTION_APP_FT8,
