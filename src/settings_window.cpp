@@ -5869,7 +5869,9 @@ static void upd_timer_cb(lv_timer_t *t) {
             if (total > 0) snprintf(s, sizeof(s), "Downloading %.1f of %.1f MB", got / 1e6, total / 1e6);
             else snprintf(s, sizeof(s), "Downloading %.1f MB", got / 1e6);
         } else if (!strcmp(step, "verify")) {
-            snprintf(s, sizeof(s), "Checking the files: %ld of %ld", got, total);
+            /* the bundle is opened before its files are counted: no "0 of 0" */
+            if (total > 0) snprintf(s, sizeof(s), "Checking the files: %ld of %ld", got, total);
+            else snprintf(s, sizeof(s), "Checking the files");
         } else if (!strcmp(step, "install")) {
             snprintf(s, sizeof(s), "Installing: %ld of %ld files", got, total);
         } else {
@@ -5878,9 +5880,13 @@ static void upd_timer_cb(lv_timer_t *t) {
         upd_show(s);
         int quarter = (!strcmp(step, "download") && total > 0) ? (int)(got * 4 / total) : 0;
         if (strcmp(step, last_step)) {
+            /* Speech: "Finishing..." only after this install's files; the last update's "done" is still in the
+             * progress file (on DATA) as the next download begins, and was said then */
+            bool stale = !strcmp(step, "done") && strcmp(last_step, "install");
+
             snprintf(last_step, sizeof(last_step), "%s", step);
             last_quarter = 0;
-            if (strcmp(step, "download")) voice_say_text_fmt("%s", s);
+            if (strcmp(step, "download") && !stale) voice_say_text_fmt("%s", s);
         } else if (quarter > last_quarter && quarter < 4) {
             last_quarter = quarter;
             voice_say_text_fmt("Downloaded %d percent", quarter * 25);
